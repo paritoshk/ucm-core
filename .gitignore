@@ -1,0 +1,18 @@
+# Rust build artifacts
+/target/
+**/*.rs.bk
+
+# Cargo lock (optional for libraries, keep for binaries)
+# Cargo.lock
+
+# Node / Dashboard
+node_modules/
+.next/
+.env*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store

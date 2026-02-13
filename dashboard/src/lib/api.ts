@@ -1,0 +1,151 @@
+/// API client for the ContextQA Rust backend.
+///
+/// Uses VITE_API_URL env var at build time (defaults to http://localhost:3001).
+/// In production, set VITE_API_URL to the Railway deployment URL.
+
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3001"
+
+export interface ApiEntity {
+    id: string
+    name: string
+    file_path: string
+    kind: string
+}
+
+export interface ApiEdge {
+    from: string
+    to: string
+    relation: string
+    confidence: number
+}
+
+export interface ImpactReport {
+    changed_entities: ChangedEntityInfo[]
+    direct_impacts: ImpactedEntity[]
+    indirect_impacts: ImpactedEntity[]
+    not_impacted: NotImpactedEntity[]
+    ambiguities: AmbiguityEntry[]
+    stats: ReportStats
+}
+
+interface ChangedEntityInfo {
+    entity_id: EntityId
+    name: string
+}
+
+interface EntityId {
+    raw: string
+}
+
+interface ImpactedEntity {
+    entity_id: EntityId
+    name: string
+    confidence: number
+    depth: number
+    impact_type: "Direct" | "Indirect"
+    path: string[]
+    reason: string
+    explanation: unknown
+}
+
+interface NotImpactedEntity {
+    entity_id: EntityId
+    name: string
+    confidence: number
+    reason: string
+}
+
+interface AmbiguityEntry {
+    kind: string
+    entity_id: EntityId
+    description: string
+    recommendation: string
+}
+
+interface ReportStats {
+    total_entities: number
+    changed_count: number
+    direct_count: number
+    indirect_count: number
+    not_impacted_count: number
+    ambiguity_count: number
+    traversal_duration_ms: number
+}
+
+export interface TestIntentReport {
+    high_confidence: TestScenario[]
+    medium_confidence: TestScenario[]
+    low_confidence: TestScenario[]
+    risks: string[]
+    coverage_gaps: string[]
+}
+
+interface TestScenario {
+    scenario: string
+    target_entity: string
+    confidence: number
+    rationale: string
+}
+
+export async function fetchHealth(): Promise<{ status: string }> {
+    const res = await fetch(`${API_BASE}/health`)
+    return res.json()
+}
+
+export async function fetchEntities(): Promise<ApiEntity[]> {
+    const res = await fetch(`${API_BASE}/graph/entities`)
+    if (!res.ok) throw new Error(`Failed to fetch entities: ${res.status}`)
+    return res.json()
+}
+
+export async function fetchEdges(): Promise<ApiEdge[]> {
+    const res = await fetch(`${API_BASE}/graph/edges`)
+    if (!res.ok) throw new Error(`Failed to fetch edges: ${res.status}`)
+    return res.json()
+}
+
+export async function fetchGraphStats(): Promise<{
+    entity_count: number
+    edge_count: number
+    avg_confidence: number
+    files_tracked: number
+}> {
+    const res = await fetch(`${API_BASE}/graph/stats`)
+    return res.json()
+}
+
+export async function analyzeImpact(
+    changedEntities: { file_path: string; symbol: string }[],
+    minConfidence = 0.1,
+    maxDepth = 10,
+): Promise<ImpactReport> {
+    const res = await fetch(`${API_BASE}/impact`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            changed_entities: changedEntities,
+            min_confidence: minConfidence,
+            max_depth: maxDepth,
+        }),
+    })
+    if (!res.ok) throw new Error(`Impact analysis failed: ${res.status}`)
+    return res.json()
+}
+
+export async function generateIntent(
+    changedEntities: { file_path: string; symbol: string }[],
+    minConfidence = 0.1,
+    maxDepth = 10,
+): Promise<TestIntentReport> {
+    const res = await fetch(`${API_BASE}/intent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            changed_entities: changedEntities,
+            min_confidence: minConfidence,
+            max_depth: maxDepth,
+        }),
+    })
+    if (!res.ok) throw new Error(`Test intent generation failed: ${res.status}`)
+    return res.json()
+}

@@ -1,0 +1,12 @@
+[package]
+name = "context-ingest"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+context-core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }

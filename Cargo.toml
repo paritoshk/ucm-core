@@ -1,0 +1,52 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/context-core",
+    "crates/context-ingest",
+    "crates/context-events",
+    "crates/context-reason",
+    "crates/context-observe",
+    "crates/context-api",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["ContextQA Team"]
+license = "MIT"
+
+[workspace.dependencies]
+# Graph
+petgraph = { version = "0.7", features = ["serde-1"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Async
+tokio = { version = "1", features = ["full"] }
+
+# Web
+axum = { version = "0.8", features = ["ws"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+
+# Observability
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# IDs and time
+uuid = { version = "1", features = ["v7", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+
+# Error handling
+thiserror = "2"
+anyhow = "1"
+
+# Internal crates
+context-core = { path = "crates/context-core" }
+context-ingest = { path = "crates/context-ingest" }
+context-events = { path = "crates/context-events" }
+context-reason = { path = "crates/context-reason" }
+context-observe = { path = "crates/context-observe" }
+context-api = { path = "crates/context-api" }
