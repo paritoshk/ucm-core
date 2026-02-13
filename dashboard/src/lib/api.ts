@@ -20,56 +20,67 @@ export interface ApiEdge {
 }
 
 export interface ImpactReport {
-    changed_entities: ChangedEntityInfo[]
-    direct_impacts: ImpactedEntity[]
-    indirect_impacts: ImpactedEntity[]
-    not_impacted: NotImpactedEntity[]
+    changes: ChangeDescription[]
+    direct_impacts: ImpactEntry[]
+    indirect_impacts: ImpactEntry[]
+    not_impacted: NotImpactedEntry[]
     ambiguities: AmbiguityEntry[]
     stats: ReportStats
 }
 
-interface ChangedEntityInfo {
-    entity_id: EntityId
+interface ChangeDescription {
+    entity_id: string
     name: string
+    change_type: string
+    file_path: string
 }
 
-interface EntityId {
-    raw: string
-}
-
-interface ImpactedEntity {
-    entity_id: EntityId
+interface ImpactEntry {
+    entity_id: string
     name: string
     confidence: number
+    tier: string
     depth: number
-    impact_type: "Direct" | "Indirect"
     path: string[]
     reason: string
-    explanation: unknown
+    explanation_chain: ExplanationChain
 }
 
-interface NotImpactedEntity {
-    entity_id: EntityId
+interface NotImpactedEntry {
+    entity_id: string
     name: string
     confidence: number
     reason: string
+    explanation_chain: ExplanationChain
+}
+
+interface ExplanationChain {
+    overall_confidence: number
+    steps: ExplanationStep[]
+    summary: string
+}
+
+interface ExplanationStep {
+    step: number
+    evidence: string
+    inference: string
+    confidence: number
 }
 
 interface AmbiguityEntry {
-    kind: string
-    entity_id: EntityId
+    entity_id?: string
+    ambiguity_type: string
     description: string
+    sources: string[]
     recommendation: string
 }
 
 interface ReportStats {
     total_entities: number
-    changed_count: number
-    direct_count: number
-    indirect_count: number
-    not_impacted_count: number
-    ambiguity_count: number
-    traversal_duration_ms: number
+    directly_impacted: number
+    indirectly_impacted: number
+    not_impacted: number
+    max_depth_reached: number
 }
 
 export interface TestIntentReport {

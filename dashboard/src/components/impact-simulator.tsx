@@ -66,6 +66,7 @@ export function ImpactSimulator() {
         if (!selectedEntity) return
         setLoading(true)
         setError(null)
+        setReport(null) // Clear previous report to avoid stale state
 
         try {
             // Parse file_path and symbol from the entity ID
@@ -146,7 +147,7 @@ export function ImpactSimulator() {
                             )}
                         </CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-2">
+                    <CardContent className="space-y-2 max-h-[400px] overflow-y-auto">
                         {entities.length === 0 && apiConnected !== false && (
                             <div className="py-8 text-center text-sm text-zinc-500">Loading entities...</div>
                         )}
@@ -236,31 +237,31 @@ export function ImpactSimulator() {
 
             {/* Impact Report from Rust API */}
             {report && (
-                <Card className="border-border/40 bg-zinc-900/60 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <Card className="border-border/40 bg-zinc-900/60 animate-in fade-in slide-in-from-bottom-4 duration-500 mb-20">
                     <CardHeader>
                         <div className="flex items-center justify-between">
                             <CardTitle className="text-lg text-zinc-200">
                                 Impact Report
                                 <span className="ml-2 text-xs font-normal text-zinc-500">
-                                    (from Rust engine — {report.stats.traversal_duration_ms}ms)
+                                    (from Rust engine)
                                 </span>
                             </CardTitle>
                             <div className="flex gap-2">
                                 <Badge variant="outline" className="border-red-500/30 bg-red-500/10 text-red-300">
-                                    {report.stats.direct_count} direct
+                                    {report.stats.directly_impacted} direct
                                 </Badge>
                                 <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-300">
-                                    {report.stats.indirect_count} indirect
+                                    {report.stats.indirectly_impacted} indirect
                                 </Badge>
                                 <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-300">
-                                    {report.stats.not_impacted_count} safe
+                                    {report.stats.not_impacted} safe
                                 </Badge>
                             </div>
                         </div>
                     </CardHeader>
                     <CardContent className="space-y-3">
                         {/* Changed entities */}
-                        {report.changed_entities.map((c, i) => {
+                        {report.changes && report.changes.map((c, i) => {
                             const config = levelConfig.changed
                             return (
                                 <div key={`ch-${i}`} className={`rounded-md border px-4 py-3 ${config.className}`}>
@@ -360,7 +361,7 @@ export function ImpactSimulator() {
                         <Separator className="my-2" />
 
                         {/* Ambiguities */}
-                        {report.ambiguities.length > 0 && (
+                        {report.ambiguities && report.ambiguities.length > 0 && (
                             <div className="space-y-2">
                                 <div className="text-xs font-medium text-zinc-400">Ambiguities Detected</div>
                                 {report.ambiguities.map((a, i) => (
@@ -368,13 +369,21 @@ export function ImpactSimulator() {
                                         key={i}
                                         className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-300"
                                     >
-                                        <div className="font-medium">{a.kind}</div>
+                                        <div className="font-medium">{a.ambiguity_type}</div>
                                         <p className="mt-0.5 opacity-80">{a.description}</p>
                                         <p className="mt-0.5 text-amber-400/60">{a.recommendation}</p>
                                     </div>
                                 ))}
                             </div>
                         )}
+
+                        {/* Logic fallback if no impacts found */}
+                        {report.direct_impacts.length === 0 && report.indirect_impacts.length === 0 && report.not_impacted.length === 0 && (
+                            <div className="text-center py-4 text-zinc-500 text-sm">
+                                No impacts analysis returned. This might technically happen if using minimum confidence 1.0.
+                            </div>
+                        )}
+
                     </CardContent>
                 </Card>
             )}
