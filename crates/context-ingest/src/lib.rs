@@ -9,6 +9,7 @@
 //! - Git diff parser: before/after → ChangeDetected events
 //! - Jira adapter: ticket JSON → Requirement entities
 //! - API log adapter: access logs → ApiEndpoint entities + traffic confidence
+//! - Git history adapter: co-change mining → CoChanged edges with HistoricalContext
 //!
 //! In production, the code parser would use real tree-sitter bindings
 //! (56+ languages). The mock parser demonstrates the same API surface
@@ -18,8 +19,10 @@ pub mod code_parser;
 pub mod diff_parser;
 pub mod jira_adapter;
 pub mod api_log_adapter;
+pub mod git_history_adapter;
 
 pub use code_parser::*;
 pub use diff_parser::*;
 pub use jira_adapter::*;
 pub use api_log_adapter::*;
+pub use git_history_adapter::*;

@@ -27,6 +27,8 @@ pub struct TestIntent {
     pub risks: Vec<Risk>,
     /// Coverage gaps identified
     pub coverage_gaps: Vec<CoverageGap>,
+    /// Entities explicitly decided NOT to test, with reasoning
+    pub decided_not_to_test: Vec<SkippedEntity>,
     /// Summary statistics
     pub summary: TestIntentSummary,
 }
@@ -59,6 +61,17 @@ pub enum RiskSeverity {
     High,
     Medium,
     Low,
+}
+
+/// An entity explicitly decided NOT to test, with reasoning.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SkippedEntity {
+    /// The entity we decided not to test
+    pub entity: String,
+    /// Why we decided not to test it
+    pub reason: String,
+    /// How confident we are that skipping is safe
+    pub confidence_of_safety: f64,
 }
 
 /// A gap in existing test coverage.
@@ -193,6 +206,17 @@ pub fn generate_test_intent(report: &ImpactReport) -> TestIntent {
         });
     }
 
+    // Populate "decided not to test" from not-impacted entities
+    let decided_not_to_test: Vec<SkippedEntity> = report
+        .not_impacted
+        .iter()
+        .map(|entry| SkippedEntity {
+            entity: entry.name.clone(),
+            reason: entry.reason.clone(),
+            confidence_of_safety: entry.confidence,
+        })
+        .collect();
+
     // Add risk for ambiguities
     for ambiguity in &report.ambiguities {
         risks.push(Risk {
@@ -216,6 +240,7 @@ pub fn generate_test_intent(report: &ImpactReport) -> TestIntent {
         low_confidence: low,
         risks,
         coverage_gaps,
+        decided_not_to_test,
         summary,
     }
 }
@@ -279,5 +304,6 @@ mod tests {
         let json = serde_json::to_string_pretty(&intent).unwrap();
         assert!(json.contains("explanation_chain"));
         assert!(json.contains("high_confidence"));
+        assert!(json.contains("decided_not_to_test"));
     }
 }

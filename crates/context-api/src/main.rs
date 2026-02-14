@@ -32,6 +32,7 @@ use context_events::projection::GraphProjection;
 use context_events::store::EventStore;
 use context_ingest::{code_parser, diff_parser, jira_adapter};
 use context_observe::trace::{trace_impact_analysis, TraceStore};
+use context_reason::ambiguity::enrich_with_ambiguities;
 use context_reason::impact::analyze_impact;
 use context_reason::intent::generate_test_intent;
 
@@ -252,6 +253,37 @@ fn seed_demo_graph(graph: &mut ContextGraph) {
             ),
         )
         .unwrap();
+
+    // Low-confidence edge from API traffic — triggers ambiguity detection.
+    // API logs suggest generateReport may call getUserProfile, but only seen
+    // in 8 out of 100 sampled requests (possibly a logging artifact).
+    graph
+        .add_relationship(
+            &EntityId::local("src/admin/reports.ts", "generateReport"),
+            &EntityId::local("src/users/profile.ts", "getUserProfile"),
+            ContextEdge::new(
+                RelationType::Calls,
+                DiscoverySource::ApiTraffic,
+                0.45,
+                "API traffic logs show occasional calls (8/100 samples) — possible logging artifact",
+            ),
+        )
+        .unwrap();
+
+    // Conflicting requirement: Jira says OAuth2 only, but API traffic still
+    // shows JWT bearer tokens in production — requirement drift.
+    graph
+        .add_relationship(
+            &EntityId::local("jira", "JIRA-AUTH-42"),
+            &EntityId::local("src/api/middleware.ts", "authMiddleware"),
+            ContextEdge::new(
+                RelationType::Implements,
+                DiscoverySource::TicketSystem,
+                0.50,
+                "JIRA-AUTH-42 says migrate to OAuth2, but middleware still uses JWT bearer tokens",
+            ),
+        )
+        .unwrap();
 }
 
 // ─── Handlers ──────────────────────────────────────────────────────
@@ -456,7 +488,8 @@ async fn impact_analysis(
     let max_depth = req.max_depth.unwrap_or(10);
 
     let start = std::time::Instant::now();
-    let report = analyze_impact(&graph, &changed, min_conf, max_depth);
+    let mut report = analyze_impact(&graph, &changed, min_conf, max_depth);
+    enrich_with_ambiguities(&mut report, &graph, 0.60);
     let duration = start.elapsed();
 
     // Record decision trace
@@ -492,7 +525,8 @@ async fn test_intent(
     let min_conf = req.min_confidence.unwrap_or(0.1);
     let max_depth = req.max_depth.unwrap_or(10);
 
-    let report = analyze_impact(&graph, &changed, min_conf, max_depth);
+    let mut report = analyze_impact(&graph, &changed, min_conf, max_depth);
+    enrich_with_ambiguities(&mut report, &graph, 0.60);
     let intent = generate_test_intent(&report);
 
     Json(serde_json::to_value(&intent).unwrap_or_default())

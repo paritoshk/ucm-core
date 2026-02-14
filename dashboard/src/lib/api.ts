@@ -87,15 +87,44 @@ export interface TestIntentReport {
     high_confidence: TestScenario[]
     medium_confidence: TestScenario[]
     low_confidence: TestScenario[]
-    risks: string[]
-    coverage_gaps: string[]
+    risks: Risk[]
+    coverage_gaps: CoverageGap[]
+    decided_not_to_test: SkippedEntity[]
+    summary: TestIntentSummary
 }
 
 interface TestScenario {
-    scenario: string
-    target_entity: string
+    description: string
+    related_entity: string
     confidence: number
     rationale: string
+    explanation_chain: ExplanationChain
+}
+
+interface Risk {
+    severity: string
+    description: string
+    mitigation: string
+}
+
+interface CoverageGap {
+    entity: string
+    description: string
+    recommendation: string
+}
+
+interface SkippedEntity {
+    entity: string
+    reason: string
+    confidence_of_safety: number
+}
+
+interface TestIntentSummary {
+    total_scenarios: number
+    high_count: number
+    medium_count: number
+    low_count: number
+    risk_count: number
 }
 
 export async function fetchHealth(): Promise<{ status: string }> {
