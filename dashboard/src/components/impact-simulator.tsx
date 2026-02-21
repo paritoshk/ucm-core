@@ -61,7 +61,7 @@ export function ImpactSimulator() {
                 setError(null)
             } catch {
                 setApiConnected(false)
-                setError("Cannot connect to Rust API. Is it running? Start with: cargo run --bin context-api")
+                setError("Cannot connect to Rust API. Is it running? Start with: cargo run --bin ucm-api")
             }
         }
         loadGraph()
@@ -145,7 +145,7 @@ export function ImpactSimulator() {
                     <p className="text-sm text-zinc-400 leading-relaxed">
                         Select an entity from the <strong>real Rust graph</strong>, simulate a change, and the Rust{" "}
                         <code className="rounded bg-zinc-800 px-1.5 py-0.5 text-xs text-violet-300 font-mono">
-                            context-reason
+                            ucm-reason
                         </code>{" "}
                         engine runs reverse BFS with Bayesian confidence scoring to predict impacts and suggest test plans.
                     </p>

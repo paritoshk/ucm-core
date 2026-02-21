@@ -1,4 +1,4 @@
-/// API client for the ContextQA Rust backend.
+/// API client for the UCM Rust backend.
 ///
 /// Uses VITE_API_URL env var at build time (defaults to http://localhost:3001).
 /// In production, set VITE_API_URL to the Railway deployment URL.

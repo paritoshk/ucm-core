@@ -1,0 +1,19 @@
+[package]
+name = "ucm-cli"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "ucm"
+path = "src/main.rs"
+
+[dependencies]
+ucm-core = { workspace = true }
+ucm-reason = { workspace = true }
+ucm-events = { workspace = true }
+ucm-ingest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+clap = { version = "4", features = ["derive"] }
