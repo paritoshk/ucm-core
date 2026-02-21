@@ -2,8 +2,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 
 const flowSteps = [
-    { label: "INPUT", color: "text-blue-400", border: "border-blue-500/30", text: "Source Code, Jira Tickets, API Logs → parsers → Vec<ContextEvent>" },
-    { label: "EVENT", color: "text-teal-400", border: "border-teal-500/30", text: "Vec<ContextEvent> → append-only store → Event Stream" },
+    { label: "INPUT", color: "text-blue-400", border: "border-blue-500/30", text: "Source Code, Jira Tickets, API Logs → parsers → Vec<UcmEvent>" },
+    { label: "EVENT", color: "text-teal-400", border: "border-teal-500/30", text: "Vec<UcmEvent> → append-only store → Event Stream" },
     { label: "GRAPH", color: "text-emerald-400", border: "border-emerald-500/30", text: "Event Stream → StableGraph projection → Fact Layers" },
     { label: "SCORE", color: "text-emerald-400", border: "border-emerald-500/30", text: "Fact Layers → Bayesian fusion → Confidence-weighted edges" },
     { label: "QUERY", color: "text-amber-400", border: "border-amber-500/30", text: "Change Set → Reverse BFS with confidence cutoff" },
@@ -91,15 +91,15 @@ export function DataFlowView() {
                 </CardHeader>
                 <CardContent>
                     <pre className="rounded-md bg-zinc-950 p-4 font-mono text-xs text-zinc-400 leading-relaxed border border-zinc-800">
-                        {`context-qa/
+                        {`ucm/
 ├── Cargo.toml                  (workspace)
 ├── crates/
-│   ├── context-core/           petgraph, serde, uuid, chrono
-│   ├── context-ingest/         mock parsers (tree-sitter API)
-│   ├── context-events/         in-memory store (RocksDB API)
-│   ├── context-reason/         impact + intent + explanation
-│   ├── context-observe/        trace + replay debugger
-│   └── context-api/            axum REST (9 endpoints)
+│   ├── ucm-core/               petgraph, serde, uuid, chrono
+│   ├── ucm-ingest/             mock parsers (tree-sitter API)
+│   ├── ucm-events/             in-memory store (RocksDB API)
+│   ├── ucm-reason/             impact + intent + explanation
+│   ├── ucm-observe/            trace + replay debugger
+│   └── ucm-api/                axum REST (9 endpoints)
 └── dashboard/                  Vite + React + shadcn/ui`}
                     </pre>
                 </CardContent>

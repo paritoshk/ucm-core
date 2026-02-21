@@ -13,10 +13,10 @@ function App() {
         <div className="relative mx-auto max-w-6xl px-6 py-16 text-center">
           <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-border/60 bg-zinc-800/60 px-4 py-1.5 text-xs font-medium text-zinc-300 backdrop-blur-sm">
             <span className="inline-block h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-            Context Intelligence System
+            Unified Context Model
           </div>
           <h1 className="text-4xl font-bold tracking-tight text-zinc-50 sm:text-5xl lg:text-6xl">
-            Context<span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-cyan-400">QA</span>
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-cyan-400">UCM</span>
           </h1>
           <p className="mx-auto mt-4 max-w-2xl text-lg text-zinc-400">
             Rust core &middot; Event sourcing &middot; Probabilistic knowledge graph &middot; Impact reasoning
@@ -53,7 +53,7 @@ function App() {
 
       {/* Footer */}
       <footer className="border-t border-border/40 py-8 text-center text-xs text-zinc-500">
-        ContextQA &middot; Built with Rust + petgraph + Axum &middot; Dashboard: Vite + React + shadcn/ui
+        UCM &middot; Built with Rust + petgraph + Axum &middot; Dashboard: Vite + React + shadcn/ui
       </footer>
     </div>
   )
