@@ -143,10 +143,21 @@ We use [SCIP](https://github.com/sourcegraph/scip) style identifiers:
 
 ---
 
-## Future Improvements
+## What's Shipped
 
-While this is a robust POC, a production version would include:
-1.  **Tree-sitter Integration**: Currently using mock parsers for the demo. Swapping in `tree-sitter` would allow real-time parsing of Rust/TS/Python.
-2.  **Graph Persistence**: Currently in-memory. Adding `sled` or `RocksDB` for embedded persistence.
-3.  **LLM Narrative Generation**: Feeding the `ExplanationChain` JSON into a local LLM to generate "Human" summary paragraphs.
-4.  **CLI Tool**: `ucm scan`, `ucm impact`, `ucm intent` commands for terminal-based workflows.
+| Component | Status |
+|-----------|--------|
+| Probabilistic graph core (Noisy-OR, confidence decay) | Done |
+| Event sourcing + replay | Done |
+| Code / Git / Jira / API-log / Linear adapters | Done |
+| `/impact` + `/intent` REST endpoints | Done |
+| `ucm scan / graph / impact / intent` CLI | Done |
+| React dashboard (Architecture, Demo, Data Flow, Impact Simulator, Integrations) | Done |
+| Linear integration (API key → issue import → graph nodes) | Done |
+
+## Future Work
+
+1. **Tree-sitter Integration**: Mock parsers today; real multi-language parsing with `tree-sitter`.
+2. **Graph Persistence**: In-memory now; `sled` / `RocksDB` for durable state across restarts.
+3. **LLM Narrative Generation**: Pipe `ExplanationChain` JSON into a local LLM for human-readable summaries.
+4. **Open-core release of `ucm-core`**: Publish the data types + Bayesian math as a standalone crate.
