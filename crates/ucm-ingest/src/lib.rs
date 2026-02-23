@@ -18,11 +18,13 @@
 pub mod code_parser;
 pub mod diff_parser;
 pub mod jira_adapter;
+pub mod linear_adapter;
 pub mod api_log_adapter;
 pub mod git_history_adapter;
 
 pub use code_parser::*;
 pub use diff_parser::*;
 pub use jira_adapter::*;
+pub use linear_adapter::*;
 pub use api_log_adapter::*;
 pub use git_history_adapter::*;

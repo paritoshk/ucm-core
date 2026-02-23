@@ -3,6 +3,7 @@ import { ArchitectureView } from "@/components/architecture-view"
 import { DemoView } from "@/components/demo-view"
 import { DataFlowView } from "@/components/data-flow-view"
 import { ImpactSimulator } from "@/components/impact-simulator"
+import { IntegrationsView } from "@/components/integrations-view"
 
 function App() {
   return (
@@ -38,16 +39,18 @@ function App() {
       {/* Main Content */}
       <main className="mx-auto max-w-6xl px-6 py-10">
         <Tabs defaultValue="architecture" className="w-full">
-          <TabsList className="mb-8 grid w-full grid-cols-4 h-12">
+          <TabsList className="mb-8 grid w-full grid-cols-5 h-12">
             <TabsTrigger value="architecture" className="text-sm font-medium">Architecture</TabsTrigger>
             <TabsTrigger value="demo" className="text-sm font-medium">Demo &amp; Reasoning</TabsTrigger>
             <TabsTrigger value="dataflow" className="text-sm font-medium">Data Flow</TabsTrigger>
             <TabsTrigger value="simulator" className="text-sm font-medium">Impact Simulator</TabsTrigger>
+            <TabsTrigger value="integrations" className="text-sm font-medium">Integrations</TabsTrigger>
           </TabsList>
           <TabsContent value="architecture"><ArchitectureView /></TabsContent>
           <TabsContent value="demo"><DemoView /></TabsContent>
           <TabsContent value="dataflow"><DataFlowView /></TabsContent>
           <TabsContent value="simulator"><ImpactSimulator /></TabsContent>
+          <TabsContent value="integrations"><IntegrationsView /></TabsContent>
         </Tabs>
       </main>
 

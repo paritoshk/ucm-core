@@ -11,6 +11,9 @@
 //! - POST /ingest/ticket      — ingest Jira tickets
 //! - POST /impact             — analyze impact of changes
 //! - POST /intent             — generate test intent from impact report
+//! - POST /linear/connect     — connect Linear workspace via API key
+//! - GET  /linear/status      — check Linear connection status
+//! - POST /ingest/linear      — fetch and ingest issues from Linear
 
 use axum::{
     extract::State,
@@ -30,7 +33,7 @@ use ucm_core::entity::*;
 use ucm_core::graph::UcmGraph;
 use ucm_events::projection::GraphProjection;
 use ucm_events::store::EventStore;
-use ucm_ingest::{code_parser, diff_parser, jira_adapter};
+use ucm_ingest::{code_parser, diff_parser, jira_adapter, linear_adapter};
 use ucm_observe::trace::{trace_impact_analysis, TraceStore};
 use ucm_reason::ambiguity::enrich_with_ambiguities;
 use ucm_reason::impact::analyze_impact;
@@ -41,6 +44,8 @@ struct AppState {
     graph: Mutex<UcmGraph>,
     event_store: Mutex<EventStore>,
     trace_store: Mutex<TraceStore>,
+    linear_api_key: Mutex<Option<String>>,
+    linear_workspace: Mutex<Option<String>>,
 }
 
 #[tokio::main]
@@ -56,6 +61,8 @@ async fn main() {
         graph: Mutex::new(graph),
         event_store: Mutex::new(EventStore::new()),
         trace_store: Mutex::new(TraceStore::new()),
+        linear_api_key: Mutex::new(None),
+        linear_workspace: Mutex::new(None),
     });
 
     let app = Router::new()
@@ -69,6 +76,9 @@ async fn main() {
         .route("/ingest/ticket", post(ingest_ticket))
         .route("/impact", post(impact_analysis))
         .route("/intent", post(test_intent))
+        .route("/linear/connect", post(connect_linear))
+        .route("/linear/status", get(linear_status))
+        .route("/ingest/linear", post(ingest_linear))
         .layer(CorsLayer::permissive())
         .with_state(state);
 
@@ -530,4 +540,157 @@ async fn test_intent(
     let intent = generate_test_intent(&report);
 
     Json(serde_json::to_value(&intent).unwrap_or_default())
+}
+
+// ─── Linear Integration ─────────────────────────────────────────
+
+#[derive(Deserialize)]
+struct ConnectLinearRequest {
+    api_key: String,
+}
+
+async fn connect_linear(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<ConnectLinearRequest>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    // Validate the key by querying Linear's API
+    let client = reqwest::Client::new();
+    let res = client
+        .post("https://api.linear.app/graphql")
+        .header("Authorization", &req.api_key)
+        .header("Content-Type", "application/json")
+        .json(&serde_json::json!({
+            "query": "{ viewer { id name } organization { name } }"
+        }))
+        .send()
+        .await
+        .map_err(|_| StatusCode::BAD_GATEWAY)?;
+
+    if !res.status().is_success() {
+        return Ok(Json(serde_json::json!({
+            "connected": false,
+            "error": "Invalid API key"
+        })));
+    }
+
+    let body: serde_json::Value = res.json().await.map_err(|_| StatusCode::BAD_GATEWAY)?;
+    let workspace = body["data"]["organization"]["name"]
+        .as_str()
+        .unwrap_or("Unknown")
+        .to_string();
+
+    *state.linear_api_key.lock().unwrap() = Some(req.api_key);
+    *state.linear_workspace.lock().unwrap() = Some(workspace.clone());
+
+    tracing::info!("Linear connected: workspace={workspace}");
+
+    Ok(Json(serde_json::json!({
+        "connected": true,
+        "workspace": workspace
+    })))
+}
+
+async fn linear_status(
+    State(state): State<Arc<AppState>>,
+) -> Json<serde_json::Value> {
+    let has_key = state.linear_api_key.lock().unwrap().is_some();
+    let workspace = state.linear_workspace.lock().unwrap().clone();
+
+    Json(serde_json::json!({
+        "connected": has_key,
+        "workspace": workspace
+    }))
+}
+
+async fn ingest_linear(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let api_key = state.linear_api_key.lock().unwrap().clone();
+    let api_key = match api_key {
+        Some(k) => k,
+        None => {
+            return Ok(Json(serde_json::json!({
+                "error": "Linear not connected. Call /linear/connect first."
+            })));
+        }
+    };
+
+    // Fetch issues from Linear GraphQL API
+    let client = reqwest::Client::new();
+    let res = client
+        .post("https://api.linear.app/graphql")
+        .header("Authorization", &api_key)
+        .header("Content-Type", "application/json")
+        .json(&serde_json::json!({
+            "query": r#"{
+                issues(first: 50, orderBy: updatedAt) {
+                    nodes {
+                        identifier
+                        title
+                        description
+                        priority
+                        state { name }
+                        labels { nodes { name } }
+                        assignee { name }
+                        url
+                    }
+                }
+            }"#
+        }))
+        .send()
+        .await
+        .map_err(|_| StatusCode::BAD_GATEWAY)?;
+
+    let body: serde_json::Value = res.json().await.map_err(|_| StatusCode::BAD_GATEWAY)?;
+
+    // Map GraphQL response to LinearIssue structs
+    let nodes = body["data"]["issues"]["nodes"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+
+    let issues: Vec<linear_adapter::LinearIssue> = nodes
+        .iter()
+        .map(|node| linear_adapter::LinearIssue {
+            identifier: node["identifier"].as_str().unwrap_or("").to_string(),
+            title: node["title"].as_str().unwrap_or("").to_string(),
+            description: node["description"].as_str().unwrap_or("").to_string(),
+            state: node["state"]["name"].as_str().unwrap_or("").to_string(),
+            priority: format!("{}", node["priority"].as_f64().unwrap_or(0.0) as u8),
+            labels: node["labels"]["nodes"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|l| l["name"].as_str().map(|s| s.to_string()))
+                        .collect()
+                })
+                .unwrap_or_default(),
+            assignee: node["assignee"]["name"].as_str().map(|s| s.to_string()),
+            url: node["url"].as_str().map(|s| s.to_string()),
+        })
+        .collect();
+
+    let issues_count = issues.len();
+    let mut total_events = 0;
+
+    {
+        let mut store = state.event_store.lock().unwrap();
+        let mut graph = state.graph.lock().unwrap();
+        for issue in &issues {
+            let events = linear_adapter::ingest_linear_issue(issue);
+            total_events += events.len();
+            for event in &events {
+                GraphProjection::apply_event(&mut graph, event);
+            }
+            store.append_batch(events);
+        }
+    }
+
+    tracing::info!("Ingested {issues_count} Linear issues ({total_events} events)");
+
+    Ok(Json(serde_json::json!({
+        "status": "ingested",
+        "issues_count": issues_count,
+        "events_created": total_events
+    })))
 }
