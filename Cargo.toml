@@ -1,18 +1,19 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/context-core",
-    "crates/context-ingest",
-    "crates/context-events",
-    "crates/context-reason",
-    "crates/context-observe",
-    "crates/context-api",
+    "crates/ucm-core",
+    "crates/ucm-ingest",
+    "crates/ucm-events",
+    "crates/ucm-reason",
+    "crates/ucm-observe",
+    "crates/ucm-api",
+    "crates/ucm-cli",
 ]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-authors = ["ContextQA Team"]
+authors = ["UCM Contributors"]
 license = "MIT"
 
 [workspace.dependencies]
@@ -30,6 +31,7 @@ tokio = { version = "1", features = ["full"] }
 axum = { version = "0.8", features = ["ws"] }
 tower = "0.5"
 tower-http = { version = "0.6", features = ["cors", "trace"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 
 # Observability
 tracing = "0.1"
@@ -44,9 +46,9 @@ thiserror = "2"
 anyhow = "1"
 
 # Internal crates
-context-core = { path = "crates/context-core" }
-context-ingest = { path = "crates/context-ingest" }
-context-events = { path = "crates/context-events" }
-context-reason = { path = "crates/context-reason" }
-context-observe = { path = "crates/context-observe" }
-context-api = { path = "crates/context-api" }
+ucm-core = { path = "crates/ucm-core" }
+ucm-ingest = { path = "crates/ucm-ingest" }
+ucm-events = { path = "crates/ucm-events" }
+ucm-reason = { path = "crates/ucm-reason" }
+ucm-observe = { path = "crates/ucm-observe" }
+ucm-api = { path = "crates/ucm-api" }

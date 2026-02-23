@@ -1,0 +1,21 @@
+[package]
+name = "ucm-api"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+ucm-core = { workspace = true }
+ucm-events = { workspace = true }
+ucm-ingest = { workspace = true }
+ucm-reason = { workspace = true }
+ucm-observe = { workspace = true }
+axum = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+tower-http = { workspace = true }
+reqwest = { workspace = true }

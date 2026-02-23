@@ -172,6 +172,34 @@ export async function analyzeImpact(
     return res.json()
 }
 
+export async function connectLinear(apiKey: string): Promise<{ connected: boolean; workspace: string }> {
+    const res = await fetch(`${API_BASE}/linear/connect`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ api_key: apiKey }),
+    })
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
+        throw new Error(err.error || `Failed to connect: ${res.status}`)
+    }
+    return res.json()
+}
+
+export async function getLinearStatus(): Promise<{ connected: boolean; workspace?: string }> {
+    const res = await fetch(`${API_BASE}/linear/status`)
+    if (!res.ok) throw new Error(`Failed to get status: ${res.status}`)
+    return res.json()
+}
+
+export async function importLinearIssues(): Promise<{ issues_count: number; events_created: number }> {
+    const res = await fetch(`${API_BASE}/ingest/linear`, { method: "POST" })
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
+        throw new Error(err.error || `Import failed: ${res.status}`)
+    }
+    return res.json()
+}
+
 export async function generateIntent(
     changedEntities: { file_path: string; symbol: string }[],
     minConfidence = 0.1,
