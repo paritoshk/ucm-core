@@ -17,3 +17,6 @@ node_modules/
 *.swo
 .DS_Store
 .vercel
+
+# Sample code
+crates/UCM_SAMPLE_CODE.zip

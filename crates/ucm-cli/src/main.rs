@@ -175,6 +175,14 @@ fn build_graph(dir: &PathBuf, language: &str) -> UcmGraph {
         _ => vec!["ts", "js", "rs", "py"],
     };
 
+    // Build crate map for Rust cross-crate import resolution.
+    // Scans for Cargo.toml files and maps crate name → src/ directory path.
+    let crate_map = if matches!(language, "rust" | "rs") {
+        build_rust_crate_map(dir)
+    } else {
+        code_parser::RustCrateMap::new()
+    };
+
     let walker = walk_source_files(dir, &extensions);
     for file_path in &walker {
         let source = match std::fs::read_to_string(file_path) {
@@ -188,13 +196,64 @@ fn build_graph(dir: &PathBuf, language: &str) -> UcmGraph {
             .to_string_lossy()
             .to_string();
 
-        let events = code_parser::parse_source_code(&relative, &source, language);
+        let events =
+            code_parser::parse_source_code_with_context(&relative, &source, language, &crate_map);
         for event in &events {
             ucm_events::projection::GraphProjection::apply_event(&mut graph, event);
         }
     }
 
     graph
+}
+
+/// Scan for Cargo.toml files and build a mapping: crate_name → src/ directory path.
+/// e.g. "ucm_core" → "ucm-core/src"
+fn build_rust_crate_map(dir: &PathBuf) -> code_parser::RustCrateMap {
+    let mut map = code_parser::RustCrateMap::new();
+
+    fn scan_for_cargo_tomls(dir: &PathBuf, base: &PathBuf, map: &mut code_parser::RustCrateMap) {
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    let name = path.file_name().unwrap_or_default().to_string_lossy();
+                    if name.starts_with('.') || name == "target" || name == "node_modules" {
+                        continue;
+                    }
+                    scan_for_cargo_tomls(&path, base, map);
+                } else if path.file_name().is_some_and(|n| n == "Cargo.toml") {
+                    // Read crate name from Cargo.toml
+                    if let Ok(content) = std::fs::read_to_string(&path) {
+                        if let Some(name_line) = content.lines().find(|l| l.starts_with("name")) {
+                            let crate_name = name_line
+                                .split('=')
+                                .nth(1)
+                                .map(|s| s.trim().trim_matches('"').to_string())
+                                .unwrap_or_default();
+                            if !crate_name.is_empty() {
+                                // Map underscored crate name to src/ path
+                                let crate_dir = path.parent().unwrap_or(&path);
+                                let src_dir = crate_dir.join("src");
+                                if src_dir.exists() {
+                                    let relative = src_dir
+                                        .strip_prefix(base)
+                                        .unwrap_or(&src_dir)
+                                        .to_string_lossy()
+                                        .to_string();
+                                    // Rust uses underscores in import paths
+                                    let rust_name = crate_name.replace('-', "_");
+                                    map.insert(rust_name, relative);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    scan_for_cargo_tomls(dir, dir, &mut map);
+    map
 }
 
 fn walk_source_files(dir: &PathBuf, extensions: &[&str]) -> Vec<PathBuf> {
