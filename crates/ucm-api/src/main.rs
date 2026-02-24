@@ -374,8 +374,8 @@ async fn graph_edges(State(state): State<Arc<AppState>>) -> Json<Vec<ApiEdge>> {
                 .unwrap_or(&vec![])
                 .iter()
                 .map(|e| ApiEdge {
-                    from: e["from"]["raw"].as_str().unwrap_or("").to_string(),
-                    to: e["to"]["raw"].as_str().unwrap_or("").to_string(),
+                    from: e["from"].as_str().unwrap_or("").to_string(),
+                    to: e["to"].as_str().unwrap_or("").to_string(),
                     relation: e["edge"]["relation_type"]
                         .as_str()
                         .unwrap_or("")
