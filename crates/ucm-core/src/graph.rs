@@ -85,7 +85,9 @@ impl UcmGraph {
             }
             idx
         } else {
-            self.add_entity(entity).unwrap()
+            // add_entity only fails if duplicate — we checked above, so this is safe.
+            // Use expect with a clear message rather than unwrap.
+            self.add_entity(entity).expect("add_entity: duplicate despite index miss (logic error)")
         }
     }
 

@@ -1632,6 +1632,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "ucm-core",
+ "ucm-events",
  "uuid",
 ]
 

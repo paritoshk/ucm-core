@@ -1,95 +1,69 @@
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Button } from "@/components/ui/button"
+import { analyzeImpact, type ImpactReport } from "@/lib/api"
 
 const demoScenarios = [
     {
         title: "Change Impact Trace",
         desc: "Modify auth service, trace graph path to affected payment endpoint, explain why with dependency chain.",
-        command: "ucm impact --change src/auth/service.ts --output json --explain",
+        command: "ucm impact src/auth/service.ts validateToken --json",
         badge: "Impact",
         badgeClass: "border-red-500/30 bg-red-500/10 text-red-300",
     },
     {
         title: "Ambiguity Detection",
-        desc: "Jira says reset via email but API logs show SMS — system flags conflict and cites evidence.",
-        command: "ucm audit --source jira,api-logs --detect conflicts",
+        desc: "Engine flags low-confidence edges and conflicting data sources. Surfaces drift between Jira requirements and live API traffic.",
+        command: "ucm impact src/auth/service.ts validateToken --min-confidence 0.3",
         badge: "Audit",
         badgeClass: "border-amber-500/30 bg-amber-500/10 text-amber-300",
     },
     {
-        title: "Reasoning Replay",
-        desc: "Re-derive a past decision from the event log. Show full reasoning chain with diffs.",
-        command: "ucm replay --event-id <uuid> --verbose --diff",
-        badge: "Debug",
+        title: "Graph Exploration",
+        desc: "Scan source files, build a dependency graph, and export as JSON for further analysis or visualization.",
+        command: "ucm graph ./my-project --export json -l typescript",
+        badge: "Explore",
         badgeClass: "border-purple-500/30 bg-purple-500/10 text-purple-300",
     },
     {
-        title: "Confidence Decay",
-        desc: "Query stale dependencies. Show which edges fell below threshold with re-verification guidance.",
-        command: "ucm health --threshold 0.6 --show-decay",
-        badge: "Health",
+        title: "Test Intent Generation",
+        desc: "Generate prioritized test recommendations from impact analysis. Outputs must-test, should-test, and risk categories.",
+        command: "ucm intent src/auth/service.ts validateToken --json",
+        badge: "Test Plan",
         badgeClass: "border-teal-500/30 bg-teal-500/10 text-teal-300",
     },
 ]
 
-const sampleReasoning = {
-    change: "src/auth/service.ts#validateToken()",
-    impact_report: {
-        direct: [
-            {
-                entity: "src/api/middleware.ts#authMiddleware",
-                confidence: 0.95,
-                reason: "Imports validateToken directly",
-            },
-        ],
-        indirect: [
-            {
-                entity: "src/payments/checkout.ts#processPayment",
-                confidence: 0.72,
-                reason: "authMiddleware → routeHandler → processPayment (3-hop, confidence decays)",
-                path: ["authMiddleware", "protectedRoutes", "checkoutRoute", "processPayment"],
-            },
-        ],
-        not_impacted: [
-            {
-                entity: "src/admin/reports.ts",
-                confidence: 0.88,
-                reason: "No graph path exists; uses separate admin auth flow",
-            },
-        ],
-        ambiguities: [
-            {
-                type: "drift",
-                detail: "Jira AUTH-42 says OAuth2 only, but API logs show JWT bearer tokens",
-                sources: { jira: "OAuth2", api_logs: "JWT Bearer" },
-                recommendation: "Verify with team, test both flows",
-            },
-        ],
-    },
-    explanation_chain: [
-        {
-            step: 1,
-            evidence: "git diff shows validateToken() signature changed",
-            inference: "Return type changed from boolean to Result<Claims, AuthError>",
-            confidence: 1.0,
-        },
-        {
-            step: 2,
-            evidence: "Static analysis found 3 call sites via reverse BFS",
-            inference: "All callers must handle the new Result type",
-            confidence: 0.95,
-        },
-        {
-            step: 3,
-            evidence: "API logs show /checkout called 1.2M times/day",
-            inference: "Payment flow is a high-traffic indirect dependency",
-            confidence: 0.72,
-        },
-    ],
-}
-
 export function DemoView() {
+    const [liveOutput, setLiveOutput] = useState<ImpactReport | null>(null)
+    const [loading, setLoading] = useState(false)
+    const [error, setError] = useState<string | null>(null)
+    const [hasLoaded, setHasLoaded] = useState(false)
+
+    // Fetch live reasoning output from the Rust API using the demo graph's validateToken
+    const fetchLiveOutput = async () => {
+        setLoading(true)
+        setError(null)
+        try {
+            const result = await analyzeImpact([
+                { file_path: "src/auth/service.ts", symbol: "validateToken" },
+            ])
+            setLiveOutput(result)
+            setHasLoaded(true)
+        } catch {
+            setError("Cannot connect to Rust API. Start with: cargo run --bin ucm-api")
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    // Auto-fetch on mount
+    useEffect(() => {
+        fetchLiveOutput()
+    }, [])
+
     return (
         <div className="space-y-8">
             {/* Explanation */}
@@ -134,15 +108,50 @@ export function DemoView() {
                 ))}
             </div>
 
-            {/* Sample JSON Output */}
+            {/* Live Reasoning Output */}
             <Card className="border-border/40 bg-zinc-900/60">
                 <CardHeader>
-                    <CardTitle className="text-lg text-zinc-200">Sample Reasoning Output</CardTitle>
+                    <div className="flex items-center justify-between">
+                        <CardTitle className="text-lg text-zinc-200">
+                            Live Reasoning Output
+                            <Badge
+                                variant="outline"
+                                className={
+                                    hasLoaded
+                                        ? "ml-3 border-emerald-500/30 bg-emerald-500/10 text-emerald-300 text-[10px]"
+                                        : error
+                                            ? "ml-3 border-red-500/30 bg-red-500/10 text-red-300 text-[10px]"
+                                            : "ml-3 border-zinc-500/30 bg-zinc-500/10 text-zinc-300 text-[10px]"
+                                }
+                            >
+                                {hasLoaded ? "Live from Rust API" : error ? "API Offline" : "Loading..."}
+                            </Badge>
+                        </CardTitle>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={fetchLiveOutput}
+                            disabled={loading}
+                            className="text-xs"
+                        >
+                            {loading ? "Fetching..." : "Refresh"}
+                        </Button>
+                    </div>
                 </CardHeader>
                 <CardContent>
+                    {error && (
+                        <div className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300 mb-4">
+                            {error}
+                        </div>
+                    )}
                     <ScrollArea className="h-[400px] rounded-md">
                         <pre className="rounded-md bg-zinc-950 p-4 font-mono text-xs text-zinc-300 leading-relaxed border border-zinc-800">
-                            {JSON.stringify(sampleReasoning, null, 2)}
+                            {liveOutput
+                                ? JSON.stringify(liveOutput, null, 2)
+                                : loading
+                                    ? "Fetching live data from Rust engine..."
+                                    : "No data available. Ensure the API is running."
+                            }
                         </pre>
                     </ScrollArea>
                 </CardContent>

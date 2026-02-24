@@ -15,7 +15,7 @@ use ucm_reason::ambiguity::enrich_with_ambiguities;
 
 /// UCM community edition entity limit.
 /// Full analysis requires UCM Pro for repos exceeding this limit.
-const COMMUNITY_ENTITY_LIMIT: usize = 10;
+const COMMUNITY_ENTITY_LIMIT: usize = 500;
 
 #[derive(Parser)]
 #[command(name = "ucm", version, about = "Unified Context Model — probabilistic impact analysis")]

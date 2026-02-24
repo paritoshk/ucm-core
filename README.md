@@ -1,163 +1,195 @@
-# UCM: Unified Context Model
+# UCM — Unified Context Model
 
-> "Don't just count the lines of code changed. Reason about the blast radius."
+**Probabilistic impact analysis for code changes.**
 
-**UCM** is a probabilistic reasoning engine that predicts the impact of code changes on your software architecture. It moves beyond static analysis (grep/find references) by building a **Bayesian Belief Network** of your system, ingesting data from code, Jira, API logs, and git history to generate prioritized **Test Intent**.
+UCM builds a Bayesian dependency graph of your codebase and answers:
+*"I changed this function — what else might break, and how confident are you?"*
 
----
-
-## How to Evaluate This Submission
-
-Since I am not sharing the full GitHub repository, this README and the embedded sample output below **are the primary deliverables**.
-
-**Look for:**
-1.  **The "Research"**: See [Probabilistic Reasoning](#-probabilistic-reasoning) for the Noisy-OR and Bayesian fusion math used to calculate confidence.
-2.  **The Architecture**: A clean separation between the Event Sourced ingestion layer (`ucm-ingest`), the Graph Core (`ucm-core`), and the Reasoning Engine (`ucm-reason`).
-3.  **The Output**: Check the [Live Demo Output](#-live-demo-output-real-api-response) section. This is real JSON from the running engine, showing how it handles ambiguity and impact decay.
+[![CI](https://github.com/paritoshk/ucm-core/actions/workflows/ci.yml/badge.svg)](https://github.com/paritoshk/ucm-core/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 ---
 
-## Quick Start
+## Install
 
-### 1. Run the Backend (Rust)
-The engine is written in Rust for performance and correctness.
+```bash
+cargo install ucm
+```
+
+Or build from source:
+
+```bash
+git clone https://github.com/paritoshk/ucm-core
+cd ucm-core
+cargo build --release
+```
+
+---
+
+## Quick start
+
+```bash
+# Scan a TypeScript project
+ucm scan ./src --language typescript
+
+# What breaks if I change validateToken?
+ucm impact src/auth/service.ts validateToken
+
+# Get test recommendations for that change
+ucm intent src/auth/service.ts validateToken
+```
+
+**Example output:**
+
+```
+UCM Impact Analysis
+====================
+  Changed: src/auth/service.ts#validateToken
+
+  DIRECT IMPACTS:
+    authMiddleware — 95% confidence
+      1. authMiddleware imports validateToken directly (StaticAnalysis)
+
+  INDIRECT IMPACTS:
+    processPayment — 76% confidence (2 hops)
+      1. processPayment depends on authMiddleware
+      2. authMiddleware imports validateToken
+
+  NOT IMPACTED:
+    generateReport — 90% safe (No graph path to changed entities)
+```
+
+---
+
+## How it works
+
+UCM scans your source files, builds a typed dependency graph, and runs a
+**reverse BFS** from the changed entity. Each hop applies confidence decay:
+
+```
+confidence(path) = Π edge_weight_i
+```
+
+When multiple independent sources confirm the same relationship (static
+analysis + API traffic logs), UCM fuses them with **Noisy-OR**:
+
+```
+P(edge) = 1 − Π(1 − P(source_i))
+```
+
+This means two 80% signals produce 96% confidence — not 64% (naive multiply).
+Confidence also decays over time at rates tuned per relationship type (import
+statements decay slowly; API traffic patterns decay fast).
+
+---
+
+## CLI reference
+
+```
+ucm scan <path> [--language rust|typescript|python]
+    Scan source files and print graph statistics.
+
+ucm graph <path> [--export json]
+    Show entity list or export full graph as JSON.
+
+ucm impact <file> <symbol> [--min-confidence 0.1] [--max-depth 10] [--json]
+    Run reverse BFS from a changed symbol. Print impacted entities with
+    confidence scores and explanation chains.
+
+ucm intent <file> <symbol> [--json]
+    Same as impact, but formats output as prioritised test scenarios:
+    MUST TEST / SHOULD TEST / RISKS / COVERAGE GAPS.
+```
+
+---
+
+## REST API
+
+The `ucm-api` binary exposes the same analysis over HTTP (default: `localhost:3001`).
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/health` | Liveness check |
+| GET | `/graph/entities` | All entities in graph |
+| GET | `/graph/edges` | All edges with confidence |
+| GET | `/graph/stats` | Entity/edge counts, avg confidence |
+| POST | `/ingest/code` | Scan a file path into graph |
+| POST | `/impact` | Impact analysis for a change set |
+| POST | `/intent` | Test intent for a change set |
+| POST | `/linear/connect` | Connect Linear workspace (API key) |
+| GET | `/linear/status` | Connection status |
+| POST | `/ingest/linear` | Import Linear issues as graph nodes |
+
 ```bash
 cargo run --bin ucm-api
-```
-*Starts HTTP server on `localhost:3001` and seeds a demo graph.*
 
-### 2. Run the Dashboard (React)
+curl -s http://localhost:3001/health
+# {"status":"ok"}
+
+curl -s -X POST http://localhost:3001/impact \
+  -H 'Content-Type: application/json' \
+  -d '{"changed_entities":[{"file_path":"src/auth/service.ts","symbol":"validateToken"}]}'
+```
+
+---
+
+## Dashboard
+
+Interactive UI for exploring the graph and running impact analysis:
+
 ```bash
 cd dashboard
-pnpm install && pnpm dev
+npm install && npm run dev
+# http://localhost:5173
 ```
-*Starts interactive UI on `localhost:5173`.*
 
-### 3. Run the Tests
+Set `VITE_API_URL` to point at a remote `ucm-api` instance.
+
+---
+
+## Architecture
+
+```
+ucm-core      — graph types, Bayesian math, SCIP identity  [open-source]
+ucm-ingest    — source adapters: code, git, Jira, Linear   [this repo]
+ucm-events    — event store + graph projection             [this repo]
+ucm-reason    — BFS impact engine, test intent             [proprietary]
+ucm-observe   — event replay, audit trail                  [this repo]
+ucm-api       — Axum REST server                           [this repo]
+ucm-cli       — terminal interface                         [this repo]
+```
+
+**Event sourcing:** every parser and adapter emits immutable `UcmEvent`s. The
+projection replays them to build the graph — any point-in-time state is
+reproducible by replaying the event log up to that timestamp.
+
+**SCIP identity:** entities use Sourcegraph SCIP-style strings
+(`scip:local/project/0.0.0/src/auth/service.ts#validateToken`), so files can
+be re-indexed independently without central ID coordination.
+
+---
+
+## Current limitations
+
+| Item | Status |
+|------|--------|
+| Parser | Regex-based. Works for extracting functions and import relationships. Not as precise as tree-sitter for complex generics or macros. |
+| Graph persistence | In-memory only. Restarting `ucm-api` rebuilds from scratch. |
+| Language support | TypeScript, JavaScript, Rust, Python. Other languages return module entities only. |
+| Call-site detection | Import edges are detected. Call edges within function bodies are not yet extracted. |
+
+---
+
+## Development
+
 ```bash
-cargo test --workspace
-```
-**Status**: 51 tests passed across 6 crates (Core, Ingest, Reason, Events, Observe, API).
-
----
-
-## Probabilistic Reasoning
-
-Most impact analysis tools satisfy themselves with boolean reachability: "A calls B, so B is impacted." UCM implements a **Bayesian** approach because software relationships are rarely certain.
-
-### 1. Noisy-OR Fusion
-When multiple evidence sources (e.g., Static Code Analysis AND API Traffic) suggest the same relationship, we don't just average them. We use the **Noisy-OR** model to calculate the probability that *at least one* cause is active.
-
-$$ P(Edge) = 1 - \prod_{i} (1 - P(Source_i)) $$
-
-*Example:* If Static Analysis detects a call (80% confidence) and API Logs also see traffic (60% confidence):
-$$ P = 1 - (1 - 0.80)(1 - 0.60) = 1 - (0.2)(0.4) = 0.92 $$
-The combined confidence (92%) is higher than either single source, reflecting independent verification.
-
-### 2. Transitive Confidence Decay
-Impact confidence decays as it traverses the graph.
-$$ Confidence(Path) = \prod EdgeWeight_i $$
-A generic 3-hop dependency is less risky than a direct call. The engine prunes paths that drop below a configurable `min_confidence` threshold.
-
----
-
-## Live Demo Output (Real API Response)
-
-Scenario: We changed the return signature of `validateToken()` in `src/auth/service.ts`.
-Here is the raw JSON response from the `/intent` endpoint, showing how the engine reasons about downstream risk.
-
-```json
-{
-  "summary": {
-    "total_scenarios": 8,
-    "high_count": 3,
-    "medium_count": 4,
-    "risk_count": 6
-  },
-  "high_confidence": [
-    {
-      "description": "Verify authMiddleware() still functions correctly after change",
-      "confidence": 0.95,
-      "related_entity": "authMiddleware()",
-      "rationale": "imports via src/auth/service.ts#validateToken",
-      "explanation_chain": {
-        "summary": "authMiddleware() is impacted by this change",
-        "steps": [
-          {
-            "step": 1,
-            "evidence": "Graph traversal found dependency path: validateToken → authMiddleware",
-            "inference": "authMiddleware() is transitively dependent via 1 hops",
-            "confidence": 0.95
-          }
-        ]
-      }
-    }
-  ],
-  "risks": [
-    {
-      "severity": "High",
-      "description": "Ambiguity: Low confidence (45%) on relationship: generateReport() → getUserProfile()",
-      "mitigation": "Verify the relationship between generateReport() and getUserProfile()"
-    },
-    {
-      "severity": "High",
-      "description": "JIRA-AUTH-42: OAuth2 Migration directly depends on changed code",
-      "mitigation": "Run existing tests for JIRA-AUTH-42"
-    }
-  ],
-  "low_confidence": [
-    {
-      "description": "Verify generateReport() end-to-end flow still works",
-      "confidence": 0.36,
-      "related_entity": "generateReport()",
-      "rationale": "calls via src/users/profile.ts#getUserProfile"
-    }
-  ]
-}
+cargo test --workspace   # run all tests
+cargo clippy --workspace # lint
+cargo fmt --all          # format
 ```
 
-**Observation:**
-1.  **Ambiguity Detection**: The engine flagged a 45% confidence link (`generateReport` -> `getUserProfile`) detected via API logs. It treats this as a **Risk** to be verified, not a definite fact.
-2.  **Jira Integration**: It correctly identified that a Requirement (`JIRA-AUTH-42`) is impacted by the code change in `validateToken`.
-
 ---
 
-## Architecture & Design Decisions
+## License
 
-### 1. Event Sourcing (The "Time Travel" Debugger)
-Instead of mutating the graph directly, `ucm-ingest` emits immutable events (`EntityDiscovered`, `EdgeDetected`).
-*   **Why**: We can replay the stream to any point in time to debug "why did the engine think X was impacted yesterday?".
-*   **Tradeoff**: Rebuild time grows linearly with history (mitigated by snapshots).
-
-### 2. SCIP Identity vs. UUIDs
-We use [SCIP](https://github.com/sourcegraph/scip) style identifiers:
-`scip:local/project/0.0.0/src/auth/service.ts#validateToken`
-*   **Why**: Decentralized identity. A parser can generate an ID for a function without checking a central database registry.
-*   **Tradeoff**: Long string keys increase memory usage compared to integer IDs.
-
-### 3. Hexagonal Architecture
-*   `ucm-core`: Pure domain logic (Graph, Bayesian math). Zero dependencies on HTTP or DB.
-*   `ucm-api`: The "Driving" adapter (Axum).
-*   `ucm-ingest`: The "Driven" adapters (Parsers, Jira).
-*   **Why**: We can swap the backend API for a CLI or a WASM module without changing the core reasoning logic.
-
----
-
-## What's Shipped
-
-| Component | Status |
-|-----------|--------|
-| Probabilistic graph core (Noisy-OR, confidence decay) | Done |
-| Event sourcing + replay | Done |
-| Code / Git / Jira / API-log / Linear adapters | Done |
-| `/impact` + `/intent` REST endpoints | Done |
-| `ucm scan / graph / impact / intent` CLI | Done |
-| React dashboard (Architecture, Demo, Data Flow, Impact Simulator, Integrations) | Done |
-| Linear integration (API key → issue import → graph nodes) | Done |
-
-## Future Work
-
-1. **Tree-sitter Integration**: Mock parsers today; real multi-language parsing with `tree-sitter`.
-2. **Graph Persistence**: In-memory now; `sled` / `RocksDB` for durable state across restarts.
-3. **LLM Narrative Generation**: Pipe `ExplanationChain` JSON into a local LLM for human-readable summaries.
-4. **Open-core release of `ucm-core`**: Publish the data types + Bayesian math as a standalone crate.
+MIT — see [LICENSE](LICENSE).

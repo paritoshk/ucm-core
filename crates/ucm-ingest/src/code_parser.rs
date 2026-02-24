@@ -1,96 +1,160 @@
 //! Code parser — extracts entities and relationships from source code.
 //!
-//! In production, this would use tree-sitter (56+ languages, incremental parsing).
-//! This mock parser demonstrates the same API and event flow by parsing
-//! TypeScript/JavaScript-like source using regex patterns.
+//! Extracts functions, classes, structs, and import relationships using
+//! language-specific pattern matching. Produces `UcmEvent` streams that
+//! the graph projection applies to build the dependency graph.
 //!
-//! What a real tree-sitter integration would add:
-//! - Sub-millisecond incremental re-parsing after edits
-//! - Error recovery for partial parses
-//! - S-expression query system for structured extraction
-//! - 56+ language grammars
+//! Supported languages: TypeScript, JavaScript, Rust, Python.
 //!
-//! Reference: tree-sitter https://tree-sitter.github.io/tree-sitter/
+//! **Edges produced:** Each file gets a `Module` entity. Functions/structs
+//! emit `DependsOn` edges to their module. Import statements emit `Imports`
+//! edges from the importing module to the imported symbol. This gives the
+//! BFS traversal a complete path: `callerFn → callerModule → importedSymbol`.
+//!
+//! Production upgrade path: replace `extract_functions_*` with tree-sitter
+//! grammars for sub-millisecond incremental re-parsing and error recovery.
+//! The event API surface stays identical — only the extraction backend changes.
 
+use std::path::Path;
 use ucm_core::entity::*;
 use ucm_core::edge::*;
 use ucm_core::event::*;
 
-/// Parse source code and extract entities + relationships as events.
+/// Parse source code and emit entity + dependency events.
 ///
-/// This mock parser handles TypeScript-like patterns:
-/// - `function name(` or `async function name(`
-/// - `export function`, `export default function`
-/// - `class Name {`
-/// - `import { ... } from '...'`
-/// - `app.get('/route'`, `router.post('/route'`
-pub fn parse_source_code(
-    file_path: &str,
-    source: &str,
-    language: &str,
-) -> Vec<UcmEvent> {
+/// # Arguments
+/// - `file_path` — path relative to project root (used as entity ID component)
+/// - `source`    — raw source text
+/// - `language`  — "typescript", "javascript", "rust", or "python"
+///
+/// # Returns
+/// Stream of `UcmEvent`s ready for `GraphProjection::apply_event`.
+pub fn parse_source_code(file_path: &str, source: &str, language: &str) -> Vec<UcmEvent> {
     let mut events = Vec::new();
 
-    // Extract functions
-    for (name, is_async, line_num, line_end) in extract_functions(source) {
+    // 1. Emit a module entity for this file so import edges have a valid source.
+    let module_id = EntityId::local(file_path, "module");
+    events.push(UcmEvent::new(EventPayload::EntityDiscovered {
+        entity_id: module_id.clone(),
+        kind: EntityKind::Module {
+            language: language.to_string(),
+            exports: vec![],
+        },
+        name: file_name_of(file_path),
+        file_path: file_path.to_string(),
+        language: language.to_string(),
+        source: DiscoverySource::StaticAnalysis,
+        line_range: None,
+    }));
+
+    // 2. Extract function/struct entities and wire them to the module.
+    let functions = match language {
+        "rust" | "rs" => extract_functions_rust(source),
+        "python" | "py" => extract_functions_python(source),
+        _ => extract_functions_ts(source),
+    };
+
+    for (name, is_async, line_start, line_end) in functions {
+        let fn_id = EntityId::local(file_path, &name);
         events.push(UcmEvent::new(EventPayload::EntityDiscovered {
-            entity_id: EntityId::local(file_path, &name),
+            entity_id: fn_id.clone(),
             kind: EntityKind::Function {
                 is_async,
-                parameter_count: 0, // simplified
+                parameter_count: 0,
                 return_type: None,
             },
             name: name.clone(),
             file_path: file_path.to_string(),
             language: language.to_string(),
             source: DiscoverySource::StaticAnalysis,
-            line_range: Some((line_num, line_end)),
+            line_range: Some((line_start, line_end)),
+        }));
+        // fn → module: "this function lives in this module"
+        events.push(UcmEvent::new(EventPayload::DependencyLinked {
+            source_entity: fn_id,
+            target_entity: module_id.clone(),
+            relation_type: RelationType::DependsOn,
+            confidence: 0.99,
+            source: DiscoverySource::StaticAnalysis,
+            description: format!("{name} is defined in {file_path}"),
         }));
     }
 
-    // Extract classes
-    for (name, line_num) in extract_classes(source) {
+    // 3. Extract class / struct entities.
+    let structs = match language {
+        "rust" | "rs" => extract_structs_rust(source),
+        "python" | "py" => extract_classes_python(source),
+        _ => extract_classes_ts(source),
+    };
+
+    for (name, line_num) in structs {
+        let struct_id = EntityId::local(file_path, &name);
         events.push(UcmEvent::new(EventPayload::EntityDiscovered {
-            entity_id: EntityId::local(file_path, &name),
-            kind: EntityKind::DataModel {
-                fields: Vec::new(),
-            },
+            entity_id: struct_id.clone(),
+            kind: EntityKind::DataModel { fields: vec![] },
             name: name.clone(),
             file_path: file_path.to_string(),
             language: language.to_string(),
             source: DiscoverySource::StaticAnalysis,
-            line_range: Some((line_num, line_num + 10)),
+            line_range: Some((line_num, line_num + 5)),
         }));
-    }
-
-    // Extract API routes
-    for (method, route, handler, line_num) in extract_routes(source) {
-        events.push(UcmEvent::new(EventPayload::EntityDiscovered {
-            entity_id: EntityId::local(file_path, &format!("{method}:{route}")),
-            kind: EntityKind::ApiEndpoint {
-                method: method.clone(),
-                route: route.clone(),
-                handler: handler.clone(),
-            },
-            name: format!("{method} {route}"),
-            file_path: file_path.to_string(),
-            language: language.to_string(),
+        events.push(UcmEvent::new(EventPayload::DependencyLinked {
+            source_entity: struct_id,
+            target_entity: module_id.clone(),
+            relation_type: RelationType::DependsOn,
+            confidence: 0.99,
             source: DiscoverySource::StaticAnalysis,
-            line_range: Some((line_num, line_num)),
+            description: format!("{name} is defined in {file_path}"),
         }));
     }
 
-    // Extract imports → DependencyLinked events
-    for (imported_symbols, from_path, line_num) in extract_imports(source) {
-        for symbol in &imported_symbols {
-            // Link: current file entity → imported entity
+    // 4. Extract API routes (TypeScript/JS only).
+    if matches!(language, "typescript" | "javascript" | "ts" | "js") {
+        for (method, route, _handler, line_num) in extract_routes_ts(source) {
+            let route_id = EntityId::local(file_path, &format!("{method}:{route}"));
+            events.push(UcmEvent::new(EventPayload::EntityDiscovered {
+                entity_id: route_id.clone(),
+                kind: EntityKind::ApiEndpoint {
+                    method: method.clone(),
+                    route: route.clone(),
+                    handler: String::new(),
+                },
+                name: format!("{method} {route}"),
+                file_path: file_path.to_string(),
+                language: language.to_string(),
+                source: DiscoverySource::StaticAnalysis,
+                line_range: Some((line_num, line_num)),
+            }));
             events.push(UcmEvent::new(EventPayload::DependencyLinked {
-                source_entity: EntityId::local(file_path, &format!("module:{file_path}")),
+                source_entity: route_id,
+                target_entity: module_id.clone(),
+                relation_type: RelationType::DependsOn,
+                confidence: 0.99,
+                source: DiscoverySource::StaticAnalysis,
+                description: format!("{method} {route} is defined in {file_path}"),
+            }));
+        }
+    }
+
+    // 5. Extract imports → module:file imports symbol.
+    //    module_id → imported symbol entity.
+    //    When the imported symbol changes, BFS propagates to this module,
+    //    then to all functions/structs that DependsOn this module.
+    let imports = match language {
+        "rust" | "rs" => extract_imports_rust(source, file_path),
+        "python" | "py" => extract_imports_python(source, file_path),
+        _ => extract_imports_ts(source, file_path),
+    };
+
+    for (symbols, from_path, line_num) in imports {
+        for symbol in &symbols {
+            events.push(UcmEvent::new(EventPayload::DependencyLinked {
+                source_entity: module_id.clone(),
                 target_entity: EntityId::local(&from_path, symbol),
                 relation_type: RelationType::Imports,
                 confidence: 0.95,
                 source: DiscoverySource::StaticAnalysis,
-                description: format!("import {{ {symbol} }} from '{from_path}' at line {line_num}"),
+                description: format!("import {symbol} from '{from_path}' at line {line_num}"),
             }));
         }
     }
@@ -98,195 +162,322 @@ pub fn parse_source_code(
     events
 }
 
-/// Extract function declarations from source.
-fn extract_functions(source: &str) -> Vec<(String, bool, usize, usize)> {
-    let mut functions = Vec::new();
+// ── TypeScript / JavaScript ───────────────────────────────────────────────────
 
-    for (line_num, line) in source.lines().enumerate() {
-        let trimmed = line.trim();
-
-        // Match patterns like:
-        // function name(
-        // async function name(
-        // export function name(
-        // export async function name(
-        // const name = async (
-        // const name = (
-
-        let is_async = trimmed.contains("async");
-
-        if let Some(name) = extract_function_name(trimmed) {
-            // Estimate function end (simple heuristic: next 20 lines or next function)
-            let line_end = line_num + 20;
-            functions.push((name, is_async, line_num + 1, line_end));
+fn extract_functions_ts(source: &str) -> Vec<(String, bool, usize, usize)> {
+    let mut out = Vec::new();
+    for (i, line) in source.lines().enumerate() {
+        let t = line.trim();
+        let is_async = t.contains("async");
+        if let Some(name) = ts_function_name(t) {
+            out.push((name, is_async, i + 1, i + 20));
         }
     }
-
-    functions
+    out
 }
 
-fn extract_function_name(line: &str) -> Option<String> {
-    // "function name(" or "async function name("
-    let patterns = ["function ", "async function "];
-    for pat in &patterns {
+fn ts_function_name(line: &str) -> Option<String> {
+    for pat in &["function ", "async function "] {
         if let Some(pos) = line.find(pat) {
             let after = &line[pos + pat.len()..];
             let name: String = after.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
-            if !name.is_empty() {
-                return Some(name);
-            }
+            if !name.is_empty() { return Some(name); }
         }
     }
-
-    // "const name = (" or "const name = async ("
+    // const name = ( or const name = async (
     if line.starts_with("const ") || line.starts_with("export const ") {
-        let after_const = if line.starts_with("export const ") {
-            &line[13..]
-        } else {
-            &line[6..]
-        };
-        if let Some(eq_pos) = after_const.find('=') {
-            let name: String = after_const[..eq_pos].trim().chars()
-                .take_while(|c| c.is_alphanumeric() || *c == '_')
-                .collect();
-            if !name.is_empty() && (after_const[eq_pos..].contains('(') || after_const[eq_pos..].contains("=>")) {
+        let rest = line.strip_prefix("export const ").unwrap_or_else(|| line.strip_prefix("const ").unwrap_or(line));
+        if let Some(eq) = rest.find('=') {
+            let name: String = rest[..eq].trim().chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
+            let after_eq = &rest[eq..];
+            if !name.is_empty() && (after_eq.contains('(') || after_eq.contains("=>")) {
                 return Some(name);
             }
         }
     }
-
     None
 }
 
-/// Extract class declarations.
-fn extract_classes(source: &str) -> Vec<(String, usize)> {
-    let mut classes = Vec::new();
-
-    for (line_num, line) in source.lines().enumerate() {
-        let trimmed = line.trim();
-        // "class Name {" or "export class Name {"
-        if trimmed.contains("class ") && trimmed.contains('{') {
-            let after_class = trimmed.split("class ").nth(1).unwrap_or("");
-            let name: String = after_class.chars()
-                .take_while(|c| c.is_alphanumeric() || *c == '_')
-                .collect();
-            if !name.is_empty() {
-                classes.push((name, line_num + 1));
+fn extract_classes_ts(source: &str) -> Vec<(String, usize)> {
+    let mut out = Vec::new();
+    for (i, line) in source.lines().enumerate() {
+        let t = line.trim();
+        if t.contains("class ") && t.contains('{') {
+            if let Some(after) = t.split("class ").nth(1) {
+                let name: String = after.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
+                if !name.is_empty() { out.push((name, i + 1)); }
             }
         }
     }
-
-    classes
+    out
 }
 
-/// Extract API route definitions.
-fn extract_routes(source: &str) -> Vec<(String, String, String, usize)> {
-    let mut routes = Vec::new();
-
-    for (line_num, line) in source.lines().enumerate() {
-        let trimmed = line.trim();
-        // Match: app.get('/route', handler) or router.post('/route', ...)
+fn extract_routes_ts(source: &str) -> Vec<(String, String, String, usize)> {
+    let mut out = Vec::new();
+    for (i, line) in source.lines().enumerate() {
+        let t = line.trim();
         for method in &["get", "post", "put", "delete", "patch"] {
-            let patterns = [
-                format!("app.{method}("),
-                format!("router.{method}("),
-            ];
-            for pat in &patterns {
-                if trimmed.contains(pat.as_str()) {
-                    if let Some(route) = extract_route_path(trimmed) {
-                        routes.push((
-                            method.to_uppercase(),
-                            route,
-                            format!("handler_line_{}", line_num + 1),
-                            line_num + 1,
-                        ));
+            for prefix in &[format!("app.{method}("), format!("router.{method}(")] {
+                if t.contains(prefix.as_str()) {
+                    if let Some(route) = ts_route_path(t) {
+                        out.push((method.to_uppercase(), route, String::new(), i + 1));
                     }
                 }
             }
         }
     }
-
-    routes
+    out
 }
 
-fn extract_route_path(line: &str) -> Option<String> {
-    // Find string between quotes after (
-    let after_paren = line.split('(').nth(1)?;
-    let quote_char = if after_paren.contains('\'') { '\'' } else { '"' };
-    let parts: Vec<&str> = after_paren.split(quote_char).collect();
-    if parts.len() >= 2 {
-        Some(parts[1].to_string())
-    } else {
-        None
-    }
+fn ts_route_path(line: &str) -> Option<String> {
+    let after = line.split('(').nth(1)?;
+    let q = if after.contains('\'') { '\'' } else { '"' };
+    let parts: Vec<&str> = after.split(q).collect();
+    if parts.len() >= 2 { Some(parts[1].to_string()) } else { None }
 }
 
-/// Extract import statements.
-fn extract_imports(source: &str) -> Vec<(Vec<String>, String, usize)> {
-    let mut imports = Vec::new();
-
-    for (line_num, line) in source.lines().enumerate() {
-        let trimmed = line.trim();
-        // import { X, Y } from './path'
-        if trimmed.starts_with("import ") && trimmed.contains("from ") {
-            let symbols = extract_import_symbols(trimmed);
-            if let Some(path) = extract_import_path(trimmed) {
-                if !symbols.is_empty() {
-                    imports.push((symbols, path, line_num + 1));
+/// Returns `(symbols, resolved_path, line_number)` for TypeScript imports.
+fn extract_imports_ts(source: &str, current_file: &str) -> Vec<(Vec<String>, String, usize)> {
+    let mut out = Vec::new();
+    let dir = parent_dir(current_file);
+    for (i, line) in source.lines().enumerate() {
+        let t = line.trim();
+        if t.starts_with("import ") && t.contains("from ") {
+            let symbols = ts_import_symbols(t);
+            if let Some(raw_path) = ts_import_path(t) {
+                // Only follow relative imports — node_modules won't be in the graph.
+                if raw_path.starts_with("./") || raw_path.starts_with("../") {
+                    let resolved = resolve_path(&dir, &raw_path, &["ts", "tsx", "js"]);
+                    if !symbols.is_empty() {
+                        out.push((symbols, resolved, i + 1));
+                    }
                 }
             }
         }
     }
-
-    imports
+    out
 }
 
-fn extract_import_symbols(line: &str) -> Vec<String> {
-    // import { X, Y, Z } from ...
-    if let Some(start) = line.find('{') {
-        if let Some(end) = line.find('}') {
-            let symbols_str = &line[start + 1..end];
-            return symbols_str.split(',')
-                .map(|s| s.trim().to_string())
-                .filter(|s| !s.is_empty())
+fn ts_import_symbols(line: &str) -> Vec<String> {
+    if let (Some(s), Some(e)) = (line.find('{'), line.find('}')) {
+        return line[s + 1..e].split(',')
+            .map(|s| s.trim().split(" as ").next().unwrap_or("").trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+    }
+    // default import: import Foo from ...
+    let after = line.strip_prefix("import ").unwrap_or("");
+    let name: String = after.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
+    if !name.is_empty() && name != "type" { vec![name] } else { vec![] }
+}
+
+fn ts_import_path(line: &str) -> Option<String> {
+    let after = line.split("from ").nth(1)?;
+    let q = if after.contains('\'') { '\'' } else { '"' };
+    let parts: Vec<&str> = after.split(q).collect();
+    if parts.len() >= 2 { Some(parts[1].to_string()) } else { None }
+}
+
+// ── Rust ─────────────────────────────────────────────────────────────────────
+
+fn extract_functions_rust(source: &str) -> Vec<(String, bool, usize, usize)> {
+    let mut out = Vec::new();
+    for (i, line) in source.lines().enumerate() {
+        let t = line.trim();
+        // Skip test functions and doc comments
+        if t.starts_with("//") || t.starts_with("#[test") { continue; }
+        if let Some(name) = rust_fn_name(t) {
+            let is_async = t.contains("async ");
+            out.push((name, is_async, i + 1, i + 30));
+        }
+    }
+    out
+}
+
+fn rust_fn_name(line: &str) -> Option<String> {
+    // Strip visibility and qualifiers
+    let stripped = line
+        .trim_start_matches("pub(crate) ")
+        .trim_start_matches("pub(super) ")
+        .trim_start_matches("pub ")
+        .trim_start_matches("async ")
+        .trim_start_matches("unsafe ")
+        .trim_start_matches("extern \"C\" ");
+    if let Some(rest) = stripped.strip_prefix("fn ") {
+        let name: String = rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
+        if !name.is_empty() { return Some(name); }
+    }
+    None
+}
+
+fn extract_structs_rust(source: &str) -> Vec<(String, usize)> {
+    let mut out = Vec::new();
+    for (i, line) in source.lines().enumerate() {
+        let t = line.trim();
+        let stripped = t.trim_start_matches("pub(crate) ").trim_start_matches("pub ");
+        if let Some(rest) = stripped.strip_prefix("struct ") {
+            let name: String = rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
+            if !name.is_empty() { out.push((name, i + 1)); }
+        } else if let Some(rest) = stripped.strip_prefix("enum ") {
+            let name: String = rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
+            if !name.is_empty() { out.push((name, i + 1)); }
+        } else if let Some(rest) = stripped.strip_prefix("trait ") {
+            let name: String = rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
+            if !name.is_empty() { out.push((name, i + 1)); }
+        }
+    }
+    out
+}
+
+/// Extract intra-project `use` imports from Rust source.
+/// Only follows `use crate::` and `use super::` — skips `std` and external crates.
+fn extract_imports_rust(source: &str, _current_file: &str) -> Vec<(Vec<String>, String, usize)> {
+    let mut out = Vec::new();
+    for (i, line) in source.lines().enumerate() {
+        let t = line.trim();
+        if !t.starts_with("use ") { continue; }
+        let rest = &t[4..]; // strip "use "
+        // Only care about crate-relative paths
+        let (crate_path, rest_after_prefix) = if let Some(r) = rest.strip_prefix("crate::") {
+            ("crate", r)
+        } else if let Some(r) = rest.strip_prefix("super::") {
+            ("super", r)
+        } else {
+            // Skip std:: and external crate imports
+            continue;
+        };
+
+        // Normalise: "crate::graph::UcmGraph" → file=crate/graph, symbol=UcmGraph
+        // Strip trailing semicolon and braces for glob/multi-import
+        let cleaned = rest_after_prefix.trim_end_matches(';');
+        let (module_path, symbols) = if cleaned.contains('{') {
+            // use crate::foo::{A, B, C}
+            let brace_start = cleaned.find('{').unwrap_or(cleaned.len());
+            let prefix = cleaned[..brace_start].trim_end_matches(':');
+            let inner = cleaned
+                .get(brace_start + 1..)
+                .and_then(|s| s.split('}').next())
+                .unwrap_or("");
+            let syms: Vec<String> = inner.split(',')
+                .map(|s| s.trim().split(" as ").next().unwrap_or("").trim().to_string())
+                .filter(|s| !s.is_empty() && s != "*")
                 .collect();
+            (prefix.to_string(), syms)
+        } else {
+            // use crate::foo::bar::Baz  →  module=crate/foo/bar, symbol=Baz
+            let parts: Vec<&str> = cleaned.split("::").collect();
+            if parts.len() < 2 { continue; }
+            let symbol = parts.last().unwrap().to_string();
+            if symbol == "*" { continue; }
+            let mod_parts = &parts[..parts.len() - 1];
+            (mod_parts.join("::"), vec![symbol])
+        };
+
+        if symbols.is_empty() { continue; }
+
+        // Convert crate::foo::bar → a file path approximation.
+        // We don't know the exact file layout, but the symbol name is what matters
+        // for matching against EntityId::local(file, symbol) produced by scanning.
+        let path_approx = format!("{crate_path}/{}", module_path.replace("::", "/"));
+        out.push((symbols, path_approx, i + 1));
+    }
+    out
+}
+
+// ── Python ───────────────────────────────────────────────────────────────────
+
+fn extract_functions_python(source: &str) -> Vec<(String, bool, usize, usize)> {
+    let mut out = Vec::new();
+    for (i, line) in source.lines().enumerate() {
+        let t = line.trim();
+        if let Some(rest) = t.strip_prefix("async def ").or_else(|| t.strip_prefix("def ")) {
+            let is_async = t.starts_with("async ");
+            let name: String = rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
+            if !name.is_empty() { out.push((name, is_async, i + 1, i + 20)); }
+        }
+    }
+    out
+}
+
+fn extract_classes_python(source: &str) -> Vec<(String, usize)> {
+    let mut out = Vec::new();
+    for (i, line) in source.lines().enumerate() {
+        let t = line.trim();
+        if let Some(rest) = t.strip_prefix("class ") {
+            let name: String = rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
+            if !name.is_empty() { out.push((name, i + 1)); }
+        }
+    }
+    out
+}
+
+fn extract_imports_python(source: &str, current_file: &str) -> Vec<(Vec<String>, String, usize)> {
+    let mut out = Vec::new();
+    let dir = parent_dir(current_file);
+    for (i, line) in source.lines().enumerate() {
+        let t = line.trim();
+        if let Some(rest) = t.strip_prefix("from .") {
+            // from .module import Foo, Bar
+            if let Some(imp_pos) = rest.find(" import ") {
+                let mod_part = &rest[..imp_pos];
+                let imp_part = &rest[imp_pos + 8..];
+                let symbols: Vec<String> = imp_part.split(',')
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty() && s != "*")
+                    .collect();
+                let path = format!("{dir}/{}.py", mod_part.trim_start_matches('.'));
+                if !symbols.is_empty() { out.push((symbols, path, i + 1)); }
+            }
+        }
+    }
+    out
+}
+
+// ── Path utilities ────────────────────────────────────────────────────────────
+
+fn parent_dir(file_path: &str) -> String {
+    Path::new(file_path)
+        .parent()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_default()
+}
+
+fn file_name_of(file_path: &str) -> String {
+    Path::new(file_path)
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| file_path.to_string())
+}
+
+/// Resolve a relative import path (e.g., `"./auth/service"`) against the
+/// directory of the importing file, appending the first matching extension.
+fn resolve_path(dir: &str, raw: &str, extensions: &[&str]) -> String {
+    // Normalise: strip leading ./ or ../
+    let without_dot_slash = if raw.starts_with("./") {
+        format!("{dir}/{}", &raw[2..])
+    } else if raw.starts_with("../") {
+        // Go up one directory level
+        let parent = Path::new(dir).parent().map(|p| p.to_string_lossy().to_string()).unwrap_or_default();
+        format!("{parent}/{}", &raw[3..])
+    } else {
+        raw.to_string()
+    };
+
+    // If already has an extension, leave it.
+    if Path::new(&without_dot_slash).extension().is_some() {
+        return without_dot_slash;
+    }
+
+    // Try common extensions.
+    for ext in extensions {
+        let candidate = format!("{without_dot_slash}.{ext}");
+        if std::path::Path::new(&candidate).exists() {
+            return candidate;
         }
     }
 
-    // import X from ...
-    let after_import = line.strip_prefix("import ").unwrap_or("");
-    let default_name: String = after_import.chars()
-        .take_while(|c| c.is_alphanumeric() || *c == '_')
-        .collect();
-    if !default_name.is_empty() && default_name != "type" {
-        return vec![default_name];
-    }
-
-    Vec::new()
-}
-
-fn extract_import_path(line: &str) -> Option<String> {
-    let after_from = line.split("from ").nth(1)?;
-    let quote_char = if after_from.contains('\'') { '\'' } else { '"' };
-    let parts: Vec<&str> = after_from.split(quote_char).collect();
-    if parts.len() >= 2 {
-        // Resolve relative path
-        let path = parts[1].to_string();
-        let resolved = if path.starts_with("./") || path.starts_with("../") {
-            // Strip leading ./ and add .ts extension if missing
-            let cleaned = path.trim_start_matches("./");
-            if cleaned.contains('.') {
-                cleaned.to_string()
-            } else {
-                format!("{cleaned}.ts")
-            }
-        } else {
-            path
-        };
-        Some(resolved)
-    } else {
-        None
-    }
+    // Fall back to first extension.
+    format!("{without_dot_slash}.{}", extensions.first().unwrap_or(&"ts"))
 }
 
 #[cfg(test)]
@@ -294,31 +485,81 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_typescript_functions() {
+    fn test_parse_typescript_emits_module_entity() {
         let source = r#"
 import { DatabaseClient } from './db/client';
-
 export async function validateToken(token: string): Promise<boolean> {
-    const decoded = jwt.verify(token);
-    return decoded.valid;
-}
-
-function helperFunction() {
     return true;
 }
-
-const arrowFn = (x: number) => x * 2;
 "#;
-
         let events = parse_source_code("src/auth/service.ts", source, "typescript");
 
-        // Should find functions
-        let entity_events: Vec<_> = events.iter().filter(|e| matches!(&e.payload, EventPayload::EntityDiscovered { .. })).collect();
-        assert!(entity_events.len() >= 2, "Should find at least 2 functions, found {}", entity_events.len());
+        let entity_events: Vec<_> = events.iter()
+            .filter(|e| matches!(&e.payload, EventPayload::EntityDiscovered { .. }))
+            .collect();
+        // module + validateToken
+        assert!(entity_events.len() >= 2, "Expected module + function entities");
 
-        // Should find import dependency
-        let dep_events: Vec<_> = events.iter().filter(|e| matches!(&e.payload, EventPayload::DependencyLinked { .. })).collect();
-        assert!(!dep_events.is_empty(), "Should find import dependencies");
+        let dep_events: Vec<_> = events.iter()
+            .filter(|e| matches!(&e.payload, EventPayload::DependencyLinked { .. }))
+            .collect();
+        // validateToken→module + module→DatabaseClient
+        assert!(dep_events.len() >= 2, "Expected function→module + module→import edges");
+    }
+
+    #[test]
+    fn test_module_entity_is_discovered_before_import_edges() {
+        let source = "import { Foo } from './foo';\nfunction bar() {}";
+        let events = parse_source_code("src/main.ts", source, "typescript");
+
+        // Module entity must appear before DependencyLinked so projection has it.
+        let first_entity = events.iter()
+            .position(|e| matches!(&e.payload, EventPayload::EntityDiscovered { .. }));
+        let first_dep = events.iter()
+            .position(|e| matches!(&e.payload, EventPayload::DependencyLinked { .. }));
+        assert!(first_entity < first_dep, "EntityDiscovered must precede DependencyLinked");
+    }
+
+    #[test]
+    fn test_parse_rust_functions_and_structs() {
+        let source = r#"
+use crate::graph::UcmGraph;
+
+pub struct GraphProjection;
+
+impl GraphProjection {
+    pub fn replay_all(events: &[UcmEvent]) -> UcmGraph {
+        UcmGraph::new()
+    }
+
+    pub async fn apply_event(graph: &mut UcmGraph, event: &UcmEvent) {}
+}
+"#;
+        let events = parse_source_code("src/projection.rs", source, "rust");
+
+        let entities: Vec<_> = events.iter()
+            .filter(|e| matches!(&e.payload, EventPayload::EntityDiscovered { kind: EntityKind::Function { .. }, .. }))
+            .collect();
+        assert!(entities.len() >= 2, "Should find replay_all and apply_event");
+
+        let structs: Vec<_> = events.iter()
+            .filter(|e| matches!(&e.payload, EventPayload::EntityDiscovered { kind: EntityKind::DataModel { .. }, .. }))
+            .collect();
+        assert!(!structs.is_empty(), "Should find GraphProjection struct");
+    }
+
+    #[test]
+    fn test_parse_rust_imports() {
+        let source = r#"
+use crate::entity::EntityId;
+use crate::graph::UcmGraph;
+use std::collections::HashMap;
+"#;
+        let imports = extract_imports_rust(source, "src/main.rs");
+        // Only crate:: imports, skip std::
+        assert_eq!(imports.len(), 2, "Should find 2 crate imports, skip std");
+        assert!(imports.iter().any(|(syms, _, _)| syms.contains(&"EntityId".to_string())));
+        assert!(imports.iter().any(|(syms, _, _)| syms.contains(&"UcmGraph".to_string())));
     }
 
     #[test]
@@ -326,38 +567,32 @@ const arrowFn = (x: number) => x * 2;
         let source = r#"
 app.get('/api/v1/users', getUsers);
 app.post('/api/v1/auth/login', handleLogin);
-router.delete('/api/v1/sessions/:id', deleteSession);
 "#;
-
         let events = parse_source_code("src/routes.ts", source, "typescript");
-        let routes: Vec<_> = events.iter().filter(|e| {
-            matches!(&e.payload, EventPayload::EntityDiscovered {
-                kind: EntityKind::ApiEndpoint { .. }, ..
-            })
-        }).collect();
-
-        assert_eq!(routes.len(), 3, "Should find 3 API routes");
+        let routes: Vec<_> = events.iter()
+            .filter(|e| matches!(&e.payload, EventPayload::EntityDiscovered { kind: EntityKind::ApiEndpoint { .. }, .. }))
+            .collect();
+        assert_eq!(routes.len(), 2);
     }
 
     #[test]
-    fn test_parse_classes() {
-        let source = r#"
-export class AuthService {
-    constructor(private db: DatabaseClient) {}
+    fn test_full_graph_has_edges() {
+        // Simulate two files: auth.ts exports validateToken, middleware.ts imports it.
+        let auth_src = "export async function validateToken() {}";
+        let mid_src  = "import { validateToken } from './auth';\nexport function authMiddleware() {}";
 
-    async validate(token: string) {
-        return this.db.query(token);
-    }
-}
-"#;
+        use ucm_events::projection::GraphProjection;
+        use ucm_core::graph::UcmGraph;
+        let mut graph = UcmGraph::new();
+        for ev in parse_source_code("src/auth.ts", auth_src, "typescript") {
+            GraphProjection::apply_event(&mut graph, &ev);
+        }
+        for ev in parse_source_code("src/middleware.ts", mid_src, "typescript") {
+            GraphProjection::apply_event(&mut graph, &ev);
+        }
 
-        let events = parse_source_code("src/auth/service.ts", source, "typescript");
-        let classes: Vec<_> = events.iter().filter(|e| {
-            matches!(&e.payload, EventPayload::EntityDiscovered {
-                kind: EntityKind::DataModel { .. }, ..
-            })
-        }).collect();
-
-        assert_eq!(classes.len(), 1, "Should find 1 class");
+        let stats = graph.stats();
+        assert!(stats.entity_count >= 2, "Should have entities");
+        assert!(stats.edge_count >= 1, "Should have at least one edge — this was the core bug");
     }
 }

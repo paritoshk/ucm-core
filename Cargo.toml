@@ -15,6 +15,12 @@ version = "0.1.0"
 edition = "2021"
 authors = ["UCM Contributors"]
 license = "MIT"
+repository = "https://github.com/paritoshk/ucm-core"
+homepage = "https://github.com/paritoshk/ucm-core"
+documentation = "https://docs.rs/ucm-core"
+keywords = ["impact-analysis", "dependency-graph", "static-analysis", "bayesian"]
+categories = ["development-tools", "algorithms"]
+readme = "README.md"
 
 [workspace.dependencies]
 # Graph
