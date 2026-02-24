@@ -395,8 +395,15 @@ async fn ingest_code(
     State(state): State<Arc<AppState>>,
     Json(req): Json<IngestCodeRequest>,
 ) -> Json<serde_json::Value> {
+    use ucm_core::event::EventPayload;
     let events = code_parser::parse_source_code(&req.file_path, &req.source, &req.language);
-    let event_count = events.len();
+
+    let entities_discovered = events.iter()
+        .filter(|e| matches!(&e.payload, EventPayload::EntityDiscovered { .. }))
+        .count();
+    let relationships_detected = events.iter()
+        .filter(|e| matches!(&e.payload, EventPayload::DependencyLinked { .. }))
+        .count();
 
     {
         let mut store = state.event_store.lock().unwrap();
@@ -409,7 +416,11 @@ async fn ingest_code(
 
     Json(serde_json::json!({
         "status": "ingested",
-        "events_created": event_count
+        "entities_discovered": entities_discovered,
+        "relationships_detected": relationships_detected,
+        // Note: relationships_detected counts edges emitted by the parser.
+        // Edges pointing to entities not yet in the graph are held pending
+        // until those entities are ingested (ingest all files for full graph).
     }))
 }
 

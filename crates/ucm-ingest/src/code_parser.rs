@@ -450,34 +450,39 @@ fn file_name_of(file_path: &str) -> String {
 }
 
 /// Resolve a relative import path (e.g., `"./auth/service"`) against the
-/// directory of the importing file, appending the first matching extension.
-fn resolve_path(dir: &str, raw: &str, extensions: &[&str]) -> String {
-    // Normalise: strip leading ./ or ../
-    let without_dot_slash = if raw.starts_with("./") {
-        format!("{dir}/{}", &raw[2..])
-    } else if raw.starts_with("../") {
-        // Go up one directory level
-        let parent = Path::new(dir).parent().map(|p| p.to_string_lossy().to_string()).unwrap_or_default();
-        format!("{parent}/{}", &raw[3..])
-    } else {
-        raw.to_string()
-    };
+/// directory of the importing file, appending `.ts` if no extension present.
+///
+/// Uses `PathBuf::join` + manual component normalization so that `../`
+/// traversal works correctly even when `dir` is a single-level path
+/// (e.g. `"fraud"` + `"../pipeline/rag"` → `"pipeline/rag.ts"`).
+fn resolve_path(dir: &str, raw: &str, _extensions: &[&str]) -> String {
+    use std::path::{Component, PathBuf};
 
-    // If already has an extension, leave it.
-    if Path::new(&without_dot_slash).extension().is_some() {
-        return without_dot_slash;
-    }
+    // Build base: treat empty dir as current directory.
+    let base = if dir.is_empty() { PathBuf::from(".") } else { PathBuf::from(dir) };
 
-    // Try common extensions.
-    for ext in extensions {
-        let candidate = format!("{without_dot_slash}.{ext}");
-        if std::path::Path::new(&candidate).exists() {
-            return candidate;
+    // Join and normalize away `.` and `..` manually.
+    // PathBuf::join handles the concatenation; we then walk components to
+    // resolve parent-dir traversal without touching the filesystem.
+    let joined = base.join(raw);
+    let mut parts: Vec<std::ffi::OsString> = Vec::new();
+    for comp in joined.components() {
+        match comp {
+            Component::ParentDir => { parts.pop(); }
+            Component::CurDir   => {}
+            Component::RootDir  => {} // drop any accidental leading /
+            other               => parts.push(other.as_os_str().to_owned()),
         }
     }
+    let normalized: PathBuf = parts.iter().collect();
+    let s = normalized.to_string_lossy();
 
-    // Fall back to first extension.
-    format!("{without_dot_slash}.{}", extensions.first().unwrap_or(&"ts"))
+    // Append .ts extension if the path has no extension (most TS imports omit it).
+    if Path::new(s.as_ref()).extension().is_none() {
+        format!("{s}.ts")
+    } else {
+        s.to_string()
+    }
 }
 
 #[cfg(test)]
@@ -573,6 +578,29 @@ app.post('/api/v1/auth/login', handleLogin);
             .filter(|e| matches!(&e.payload, EventPayload::EntityDiscovered { kind: EntityKind::ApiEndpoint { .. }, .. }))
             .collect();
         assert_eq!(routes.len(), 2);
+    }
+
+    #[test]
+    fn test_resolve_path_parent_traversal() {
+        // fraud/agent.ts imports from ../pipeline/rag-pipeline
+        // dir = "fraud", raw = "../pipeline/rag-pipeline"
+        // expected = "pipeline/rag-pipeline.ts"  (NOT "/pipeline/rag-pipeline.ts")
+        let result = resolve_path("fraud", "../pipeline/rag-pipeline", &["ts"]);
+        assert_eq!(result, "pipeline/rag-pipeline.ts");
+
+        // nested: src/fraud/agent.ts imports from ../pipeline/rag
+        // dir = "src/fraud", raw = "../pipeline/rag"
+        // expected = "src/pipeline/rag.ts"
+        let result2 = resolve_path("src/fraud", "../pipeline/rag", &["ts"]);
+        assert_eq!(result2, "src/pipeline/rag.ts");
+
+        // same-dir import: fraud/agent.ts imports ./compliance-checker
+        let result3 = resolve_path("fraud", "./compliance-checker", &["ts"]);
+        assert_eq!(result3, "fraud/compliance-checker.ts");
+
+        // file at root level: dir = "", raw = "./embedding-service"
+        let result4 = resolve_path("", "./embedding-service", &["ts"]);
+        assert_eq!(result4, "embedding-service.ts");
     }
 
     #[test]
