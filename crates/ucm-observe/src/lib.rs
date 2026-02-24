@@ -7,8 +7,8 @@
 //! "why did the system recommend testing X?", the trace contains
 //! the full derivation chain.
 
-pub mod trace;
 pub mod replay;
+pub mod trace;
 
-pub use trace::*;
 pub use replay::*;
+pub use trace::*;

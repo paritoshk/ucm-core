@@ -4,10 +4,10 @@
 //! In production, this would parse `git log --name-only` output to identify
 //! files that frequently change together, indicating implicit coupling.
 
+use serde::{Deserialize, Serialize};
 use ucm_core::edge::RelationType;
 use ucm_core::entity::*;
 use ucm_core::event::*;
-use serde::{Deserialize, Serialize};
 
 /// A co-change entry mined from git history.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -32,7 +32,7 @@ pub fn ingest_co_changes(entries: &[CoChangeEntry]) -> Vec<UcmEvent> {
     let mut events = Vec::new();
 
     for entry in entries {
-        let confidence = (entry.co_change_count as f64 / 50.0).min(0.90).max(0.20);
+        let confidence = (entry.co_change_count as f64 / 50.0).clamp(0.20, 0.90);
 
         // Create a module-level entity for each file if not already tracked
         let id_a = EntityId::local(&entry.file_a, &entry.file_a);
@@ -109,12 +109,19 @@ mod tests {
         // Check confidence scaling
         // 25/50 = 0.50 (within bounds)
         // 80/50 = 1.60, clamped to 0.90
-        let dep_events: Vec<_> = events.iter().filter(|e| matches!(
-            &e.payload, EventPayload::DependencyLinked { .. }
-        )).collect();
+        let dep_events: Vec<_> = events
+            .iter()
+            .filter(|e| matches!(&e.payload, EventPayload::DependencyLinked { .. }))
+            .collect();
         assert_eq!(dep_events.len(), 2);
 
-        if let EventPayload::DependencyLinked { confidence, relation_type, source, .. } = &dep_events[0].payload {
+        if let EventPayload::DependencyLinked {
+            confidence,
+            relation_type,
+            source,
+            ..
+        } = &dep_events[0].payload
+        {
             assert!(*confidence > 0.49 && *confidence < 0.51);
             assert!(matches!(relation_type, RelationType::CoChanged));
             assert!(matches!(source, DiscoverySource::HistoricalContext));

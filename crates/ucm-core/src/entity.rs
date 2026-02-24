@@ -27,7 +27,9 @@ impl EntityId {
     /// - `path` - File path relative to package root
     /// - `symbol` - Symbol name within the file (function, class, etc.)
     pub fn new(manager: &str, package: &str, version: &str, path: &str, symbol: &str) -> Self {
-        Self(format!("scip:{manager}/{package}/{version}/{path}#{symbol}"))
+        Self(format!(
+            "scip:{manager}/{package}/{version}/{path}#{symbol}"
+        ))
     }
 
     /// Create a simple local entity ID (for single-project analysis).
@@ -76,14 +78,12 @@ pub enum EntityKind {
     },
     /// An API endpoint (REST, GraphQL, gRPC)
     ApiEndpoint {
-        method: String,   // GET, POST, etc.
-        route: String,    // /api/v1/users
-        handler: String,  // function that handles the route
+        method: String,  // GET, POST, etc.
+        route: String,   // /api/v1/users
+        handler: String, // function that handles the route
     },
     /// A data model / struct / class / table
-    DataModel {
-        fields: Vec<String>,
-    },
+    DataModel { fields: Vec<String> },
     /// A feature or capability (extracted from tickets/docs)
     Feature {
         description: String,
@@ -185,7 +185,13 @@ mod tests {
 
     #[test]
     fn test_scip_id_construction() {
-        let id = EntityId::new("npm", "my-app", "1.0.0", "src/auth/service.ts", "validateToken");
+        let id = EntityId::new(
+            "npm",
+            "my-app",
+            "1.0.0",
+            "src/auth/service.ts",
+            "validateToken",
+        );
         assert_eq!(
             id.as_str(),
             "scip:npm/my-app/1.0.0/src/auth/service.ts#validateToken"
@@ -200,7 +206,13 @@ mod tests {
 
     #[test]
     fn test_entity_symbol_name() {
-        let id = EntityId::new("npm", "my-app", "1.0.0", "src/auth/service.ts", "validateToken");
+        let id = EntityId::new(
+            "npm",
+            "my-app",
+            "1.0.0",
+            "src/auth/service.ts",
+            "validateToken",
+        );
         assert_eq!(id.symbol_name(), Some("validateToken"));
     }
 }

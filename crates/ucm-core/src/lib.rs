@@ -1,13 +1,13 @@
-pub mod entity;
-pub mod edge;
-pub mod graph;
 pub mod confidence;
-pub mod event;
+pub mod edge;
+pub mod entity;
 pub mod error;
+pub mod event;
+pub mod graph;
 
-pub use entity::*;
-pub use edge::*;
-pub use graph::*;
 pub use confidence::*;
-pub use event::*;
+pub use edge::*;
+pub use entity::*;
 pub use error::*;
+pub use event::*;
+pub use graph::*;

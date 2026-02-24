@@ -11,8 +11,8 @@
 //! - Datomic: https://docs.datomic.com/
 //! - Event Sourcing: https://martinfowler.com/eaaDev/EventSourcing.html
 
-pub mod store;
 pub mod projection;
+pub mod store;
 
-pub use store::*;
 pub use projection::*;
+pub use store::*;

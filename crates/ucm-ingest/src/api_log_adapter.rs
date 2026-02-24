@@ -1,9 +1,9 @@
 //! API log adapter — converts access logs into ApiEndpoint entities
 //! with traffic-based confidence scoring.
 
+use serde::{Deserialize, Serialize};
 use ucm_core::entity::*;
 use ucm_core::event::*;
-use serde::{Deserialize, Serialize};
 
 /// A simplified API access log entry.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -34,20 +34,25 @@ pub fn ingest_api_logs(logs: &[ApiLogEntry]) -> Vec<UcmEvent> {
     for (key, entries) in &groups {
         let first = entries[0];
         let call_count = entries.len();
-        let avg_response = entries.iter().map(|e| e.response_time_ms).sum::<u64>() / call_count as u64;
-        let error_rate = entries.iter().filter(|e| e.status_code >= 400).count() as f64 / call_count as f64;
+        let avg_response =
+            entries.iter().map(|e| e.response_time_ms).sum::<u64>() / call_count as u64;
+        let error_rate =
+            entries.iter().filter(|e| e.status_code >= 400).count() as f64 / call_count as f64;
 
         // Traffic-based confidence: more calls = higher confidence this endpoint is real
-        let confidence = (call_count as f64 / 100.0).min(0.95).max(0.3);
+        let confidence = (call_count as f64 / 100.0).clamp(0.3, 0.95);
 
         events.push(UcmEvent::new(EventPayload::EntityDiscovered {
-            entity_id: EntityId::local(&format!("api/{}", first.path), &key),
+            entity_id: EntityId::local(&format!("api/{}", first.path), key),
             kind: EntityKind::ApiEndpoint {
                 method: first.method.clone(),
                 route: first.path.clone(),
                 handler: first.handler.clone().unwrap_or_else(|| "unknown".into()),
             },
-            name: format!("{} {} ({} calls, {}ms avg)", first.method, first.path, call_count, avg_response),
+            name: format!(
+                "{} {} ({} calls, {}ms avg)",
+                first.method, first.path, call_count, avg_response
+            ),
             file_path: format!("api/{}", first.path),
             language: "api".to_string(),
             source: DiscoverySource::ApiTraffic,
@@ -57,7 +62,7 @@ pub fn ingest_api_logs(logs: &[ApiLogEntry]) -> Vec<UcmEvent> {
         // If error rate is high, flag it
         if error_rate > 0.05 {
             events.push(UcmEvent::new(EventPayload::ConflictFlagged {
-                entity_id: EntityId::local(&format!("api/{}", first.path), &key),
+                entity_id: EntityId::local(&format!("api/{}", first.path), key),
                 conflict_type: ucm_core::event::ConflictType::RequirementDrift,
                 sources: vec![ucm_core::event::ConflictSource {
                     source_type: "api-logs".into(),
@@ -66,7 +71,10 @@ pub fn ingest_api_logs(logs: &[ApiLogEntry]) -> Vec<UcmEvent> {
                 }],
                 description: format!(
                     "Endpoint {} {} has {:.1}% error rate over {} calls",
-                    first.method, first.path, error_rate * 100.0, call_count
+                    first.method,
+                    first.path,
+                    error_rate * 100.0,
+                    call_count
                 ),
             }));
         }
@@ -110,10 +118,18 @@ mod tests {
         assert!(!events.is_empty());
 
         // Should create at least one ApiEndpoint entity
-        let endpoints: Vec<_> = events.iter().filter(|e| matches!(
-            &e.payload,
-            EventPayload::EntityDiscovered { kind: EntityKind::ApiEndpoint { .. }, .. }
-        )).collect();
+        let endpoints: Vec<_> = events
+            .iter()
+            .filter(|e| {
+                matches!(
+                    &e.payload,
+                    EventPayload::EntityDiscovered {
+                        kind: EntityKind::ApiEndpoint { .. },
+                        ..
+                    }
+                )
+            })
+            .collect();
         assert_eq!(endpoints.len(), 1);
     }
 }

@@ -1,8 +1,8 @@
 //! Linear adapter — converts Linear issues into Requirement/Feature entities.
 
+use serde::{Deserialize, Serialize};
 use ucm_core::entity::*;
 use ucm_core::event::*;
-use serde::{Deserialize, Serialize};
 
 /// A Linear issue structure matching the GraphQL API response shape.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -25,10 +25,7 @@ pub fn ingest_linear_issue(issue: &LinearIssue) -> Vec<UcmEvent> {
     let mut events = Vec::new();
 
     // Create Requirement entity
-    let entity_id = EntityId::local(
-        &format!("linear/{}", issue.identifier),
-        &issue.identifier,
-    );
+    let entity_id = EntityId::local(&format!("linear/{}", issue.identifier), &issue.identifier);
     events.push(UcmEvent::new(EventPayload::EntityDiscovered {
         entity_id: entity_id.clone(),
         kind: EntityKind::Requirement {
@@ -90,7 +87,11 @@ mod tests {
         };
 
         let events = ingest_linear_issue(&issue);
-        assert_eq!(events.len(), 2, "Should create requirement + feature entities");
+        assert_eq!(
+            events.len(),
+            2,
+            "Should create requirement + feature entities"
+        );
 
         // Verify requirement entity
         match &events[0].payload {

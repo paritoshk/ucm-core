@@ -25,7 +25,10 @@ pub fn noisy_or(confidences: &[f64]) -> f64 {
     if confidences.is_empty() {
         return 0.0;
     }
-    1.0 - confidences.iter().map(|c| 1.0 - c.clamp(0.0, 1.0)).product::<f64>()
+    1.0 - confidences
+        .iter()
+        .map(|c| 1.0 - c.clamp(0.0, 1.0))
+        .product::<f64>()
 }
 
 /// Temporal confidence decay using exponential model.
@@ -75,9 +78,7 @@ pub fn chain_confidence(edge_confidences: &[f64]) -> f64 {
 /// compute the overall confidence using noisy-OR over each path's
 /// chain confidence.
 pub fn multi_path_confidence(paths: &[Vec<f64>]) -> f64 {
-    let path_confidences: Vec<f64> = paths.iter()
-        .map(|path| chain_confidence(path))
-        .collect();
+    let path_confidences: Vec<f64> = paths.iter().map(|path| chain_confidence(path)).collect();
     noisy_or(&path_confidences)
 }
 
@@ -159,10 +160,7 @@ mod tests {
         // Path 1: 0.9 × 0.8 = 0.72
         // Path 2: 0.7 × 0.6 = 0.42
         // Noisy-OR: 1 - (1-0.72)(1-0.42) = 1 - 0.28×0.58 = 0.8376
-        let result = multi_path_confidence(&[
-            vec![0.9, 0.8],
-            vec![0.7, 0.6],
-        ]);
+        let result = multi_path_confidence(&[vec![0.9, 0.8], vec![0.7, 0.6]]);
         assert!((result - 0.8376).abs() < 0.001);
     }
 }

@@ -5,10 +5,10 @@
 //! - Drift between tickets and reality
 //! - Missing or partial data
 
-use serde::{Deserialize, Serialize};
-use ucm_core::graph::UcmGraph;
-use ucm_core::edge::ConfidenceTier;
 use crate::impact::ImpactReport;
+use serde::{Deserialize, Serialize};
+use ucm_core::edge::ConfidenceTier;
+use ucm_core::graph::UcmGraph;
 
 /// Ambiguity report — flags found in the context graph.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -43,10 +43,7 @@ pub enum AmbiguityType {
 }
 
 /// Detect ambiguities in the context graph.
-pub fn detect_ambiguities(
-    graph: &UcmGraph,
-    confidence_threshold: f64,
-) -> AmbiguityReport {
+pub fn detect_ambiguities(graph: &UcmGraph, confidence_threshold: f64) -> AmbiguityReport {
     let mut flags = Vec::new();
     let mut low_confidence_count = 0;
     let mut stale_count = 0;
@@ -77,7 +74,7 @@ pub fn detect_ambiguities(
                             "Verify the relationship between {} and {} — consider running tests or re-analyzing",
                             entity.name, dep.name
                         ),
-                        severity: format!("{}", tier.emoji()),
+                        severity: tier.emoji().to_string(),
                     });
                 }
 
@@ -90,7 +87,8 @@ pub fn detect_ambiguities(
                         entity_id: Some(entity.id.as_str().to_string()),
                         description: format!(
                             "Stale relationship: {} → {} (base {:.0}%, decayed to {:.0}%)",
-                            entity.name, dep.name,
+                            entity.name,
+                            dep.name,
                             edge.confidence * 100.0,
                             decayed * 100.0
                         ),
@@ -135,31 +133,56 @@ pub fn enrich_with_ambiguities(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ucm_core::entity::*;
     use ucm_core::edge::*;
+    use ucm_core::entity::*;
 
     #[test]
     fn test_detect_low_confidence() {
         let mut graph = UcmGraph::new();
 
-        graph.add_entity(UcmEntity::new(
-            EntityId::local("src/a.ts", "fnA"),
-            EntityKind::Function { is_async: false, parameter_count: 0, return_type: None },
-            "fnA", "src/a.ts", "typescript", DiscoverySource::StaticAnalysis,
-        )).unwrap();
+        graph
+            .add_entity(UcmEntity::new(
+                EntityId::local("src/a.ts", "fnA"),
+                EntityKind::Function {
+                    is_async: false,
+                    parameter_count: 0,
+                    return_type: None,
+                },
+                "fnA",
+                "src/a.ts",
+                "typescript",
+                DiscoverySource::StaticAnalysis,
+            ))
+            .unwrap();
 
-        graph.add_entity(UcmEntity::new(
-            EntityId::local("src/b.ts", "fnB"),
-            EntityKind::Function { is_async: false, parameter_count: 0, return_type: None },
-            "fnB", "src/b.ts", "typescript", DiscoverySource::StaticAnalysis,
-        )).unwrap();
+        graph
+            .add_entity(UcmEntity::new(
+                EntityId::local("src/b.ts", "fnB"),
+                EntityKind::Function {
+                    is_async: false,
+                    parameter_count: 0,
+                    return_type: None,
+                },
+                "fnB",
+                "src/b.ts",
+                "typescript",
+                DiscoverySource::StaticAnalysis,
+            ))
+            .unwrap();
 
         // Add a low-confidence edge
-        graph.add_relationship(
-            &EntityId::local("src/a.ts", "fnA"),
-            &EntityId::local("src/b.ts", "fnB"),
-            UcmEdge::new(RelationType::DependsOn, DiscoverySource::HistoricalContext, 0.40, "weak heuristic"),
-        ).unwrap();
+        graph
+            .add_relationship(
+                &EntityId::local("src/a.ts", "fnA"),
+                &EntityId::local("src/b.ts", "fnB"),
+                UcmEdge::new(
+                    RelationType::DependsOn,
+                    DiscoverySource::HistoricalContext,
+                    0.40,
+                    "weak heuristic",
+                ),
+            )
+            .unwrap();
 
         let report = detect_ambiguities(&graph, 0.60);
         assert!(report.total_low_confidence_edges > 0);
