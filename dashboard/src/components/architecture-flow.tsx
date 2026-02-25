@@ -96,20 +96,63 @@ function getColorForFile(filePath: string, fileMap: Map<string, number>): string
     return colorPalette[fileMap.get(filePath)! % colorPalette.length];
 }
 
-function layoutNodes(entities: ApiEntity[]): Node[] {
+// React Flow uses node IDs in DOM element IDs and CSS selectors.
+// SCIP IDs contain ':', '/', '.', '#' which break querySelector.
+// Replace every non-alphanumeric character with '_'.
+function safeId(scip: string): string {
+    return scip.replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
+function layoutNodes(entities: ApiEntity[], apiEdges: ApiEdge[]): Node[] {
     const fileMap = new Map<string, number>();
-    const COLS = 3;
+
+    // Build adjacency to compute a rough "depth" per node (BFS from roots).
+    // Roots = nodes with no incoming edges.
+    const inDegree = new Map<string, number>(entities.map(e => [e.id, 0]));
+    for (const edge of apiEdges) {
+        inDegree.set(edge.to, (inDegree.get(edge.to) ?? 0) + 1);
+    }
+    const outEdges = new Map<string, string[]>(entities.map(e => [e.id, []]));
+    for (const edge of apiEdges) {
+        outEdges.get(edge.from)?.push(edge.to);
+    }
+
+    const depth = new Map<string, number>(entities.map(e => [e.id, 0]));
+    const queue = entities.filter(e => (inDegree.get(e.id) ?? 0) === 0).map(e => e.id);
+    let visited = new Set(queue);
+    while (queue.length > 0) {
+        const id = queue.shift()!;
+        const d = depth.get(id) ?? 0;
+        for (const neighbor of outEdges.get(id) ?? []) {
+            if (!visited.has(neighbor)) {
+                visited.add(neighbor);
+                depth.set(neighbor, d + 1);
+                queue.push(neighbor);
+            }
+        }
+    }
+
+    // Group by depth column, spread rows within each column.
+    const cols = new Map<number, string[]>();
+    for (const entity of entities) {
+        const d = depth.get(entity.id) ?? 0;
+        if (!cols.has(d)) cols.set(d, []);
+        cols.get(d)!.push(entity.id);
+    }
+    const positions = new Map<string, { x: number; y: number }>();
     const X_GAP = 280;
-    const Y_GAP = 100;
+    const Y_GAP = 110;
+    for (const [col, ids] of cols) {
+        ids.forEach((id, row) => {
+            positions.set(id, { x: col * X_GAP, y: row * Y_GAP });
+        });
+    }
 
-    return entities.map((entity, i) => {
-        const col = i % COLS;
-        const row = Math.floor(i / COLS);
+    return entities.map(entity => {
         const color = getColorForFile(entity.file_path, fileMap);
-
         return {
-            id: entity.id,
-            position: { x: col * X_GAP, y: row * Y_GAP },
+            id: safeId(entity.id),
+            position: positions.get(entity.id) ?? { x: 0, y: 0 },
             data: { label: entity.name },
             style: {
                 background: '#18181b', color: '#e4e4e7',
@@ -124,8 +167,8 @@ function layoutNodes(entities: ApiEntity[]): Node[] {
 function layoutEdges(apiEdges: ApiEdge[]): Edge[] {
     return apiEdges.map((edge, i) => ({
         id: `e-${i}`,
-        source: edge.from,
-        target: edge.to,
+        source: safeId(edge.from),
+        target: safeId(edge.to),
         animated: true,
         label: edge.relation,
         type: 'smoothstep',
@@ -148,7 +191,7 @@ export function ArchitectureFlow() {
                 const [ents, eds] = await Promise.all([fetchEntities(), fetchEdges()]);
                 // Only swap to live data if the API actually has entities AND edges
                 if (ents.length > 0 && eds.length > 0) {
-                    setNodes(layoutNodes(ents));
+                    setNodes(layoutNodes(ents, eds));
                     setEdges(layoutEdges(eds));
                     setSource('live');
                 }
