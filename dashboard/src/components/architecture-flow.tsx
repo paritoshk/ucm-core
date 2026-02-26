@@ -105,15 +105,31 @@ function safeId(scip: string): string {
 
 function layoutNodes(entities: ApiEntity[], apiEdges: ApiEdge[]): Node[] {
     const fileMap = new Map<string, number>();
+    const entityIds = new Set(entities.map(e => e.id));
+
+    // Validate edges: only use edges whose from/to match existing entity IDs
+    const validEdges = apiEdges.filter(edge => {
+        const fromOk = entityIds.has(edge.from);
+        const toOk = entityIds.has(edge.to);
+        if (!fromOk || !toOk) {
+            console.warn('[UCM] Edge references unknown entity:', {
+                from: edge.from, fromExists: fromOk,
+                to: edge.to, toExists: toOk,
+            });
+        }
+        return fromOk && toOk;
+    });
+
+    console.log(`[UCM] Layout: ${entities.length} entities, ${validEdges.length}/${apiEdges.length} valid edges`);
 
     // Build adjacency to compute a rough "depth" per node (BFS from roots).
     // Roots = nodes with no incoming edges.
     const inDegree = new Map<string, number>(entities.map(e => [e.id, 0]));
-    for (const edge of apiEdges) {
+    for (const edge of validEdges) {
         inDegree.set(edge.to, (inDegree.get(edge.to) ?? 0) + 1);
     }
     const outEdges = new Map<string, string[]>(entities.map(e => [e.id, []]));
-    for (const edge of apiEdges) {
+    for (const edge of validEdges) {
         outEdges.get(edge.from)?.push(edge.to);
     }
 
@@ -139,6 +155,32 @@ function layoutNodes(entities: ApiEntity[], apiEdges: ApiEdge[]): Node[] {
         if (!cols.has(d)) cols.set(d, []);
         cols.get(d)!.push(entity.id);
     }
+
+    // If ALL nodes ended up at depth 0 (single column), redistribute into a grid
+    // so that edges are visually distinguishable.
+    const maxDepth = Math.max(...Array.from(depth.values()));
+    if (maxDepth === 0 && entities.length > 1 && validEdges.length > 0) {
+        console.warn('[UCM] All nodes at depth 0 despite edges — using grid fallback layout');
+        // Build a simple 2-column layout: sources on left, targets on right
+        const hasOutgoing = new Set(validEdges.map(e => e.from));
+        const hasIncoming = new Set(validEdges.map(e => e.to));
+        const leftCol: string[] = [];
+        const rightCol: string[] = [];
+        for (const entity of entities) {
+            if (hasOutgoing.has(entity.id) && !hasIncoming.has(entity.id)) {
+                leftCol.push(entity.id);
+            } else if (hasIncoming.has(entity.id) && !hasOutgoing.has(entity.id)) {
+                rightCol.push(entity.id);
+            } else {
+                // Both or neither — put on left
+                leftCol.push(entity.id);
+            }
+        }
+        cols.clear();
+        cols.set(0, leftCol);
+        if (rightCol.length > 0) cols.set(1, rightCol);
+    }
+
     const positions = new Map<string, { x: number; y: number }>();
     const X_GAP = 280;
     const Y_GAP = 110;
@@ -189,14 +231,35 @@ export function ArchitectureFlow() {
         async function tryLoadLive() {
             try {
                 const [ents, eds] = await Promise.all([fetchEntities(), fetchEdges()]);
+                console.log(`[UCM] API response: ${ents.length} entities, ${eds.length} edges`);
+                if (ents.length > 0) {
+                    console.log('[UCM] Sample entity id:', ents[0].id);
+                }
+                if (eds.length > 0) {
+                    console.log('[UCM] Sample edge from/to:', eds[0].from, '->', eds[0].to);
+                }
                 // Only swap to live data if the API actually has entities AND edges
                 if (ents.length > 0 && eds.length > 0) {
-                    setNodes(layoutNodes(ents, eds));
-                    setEdges(layoutEdges(eds));
+                    const liveNodes = layoutNodes(ents, eds);
+                    const liveEdges = layoutEdges(eds);
+                    // Validate: check all edge source/target match a node id
+                    const nodeIds = new Set(liveNodes.map(n => n.id));
+                    const unmatchedEdges = liveEdges.filter(
+                        e => !nodeIds.has(e.source) || !nodeIds.has(e.target)
+                    );
+                    if (unmatchedEdges.length > 0) {
+                        console.warn('[UCM] Unmatched edges after safeId:', unmatchedEdges.map(e => `${e.source} -> ${e.target}`));
+                        console.warn('[UCM] Available node IDs:', Array.from(nodeIds));
+                    }
+                    console.log(`[UCM] Rendering: ${liveNodes.length} nodes, ${liveEdges.length} edges (${unmatchedEdges.length} unmatched)`);
+                    setNodes(liveNodes);
+                    setEdges(liveEdges);
                     setSource('live');
+                } else {
+                    console.log('[UCM] Insufficient live data, keeping demo graph');
                 }
-            } catch {
-                // API not running — keep demo graph
+            } catch (err) {
+                console.warn('[UCM] API fetch failed, keeping demo graph:', err);
             }
         }
         tryLoadLive();
