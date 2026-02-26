@@ -9,16 +9,20 @@ use std::path::PathBuf;
 use ucm_core::entity::EntityId;
 use ucm_core::graph::UcmGraph;
 use ucm_ingest::code_parser;
+use ucm_reason::ambiguity::enrich_with_ambiguities;
 use ucm_reason::impact::analyze_impact;
 use ucm_reason::intent::generate_test_intent;
-use ucm_reason::ambiguity::enrich_with_ambiguities;
 
 /// UCM community edition entity limit.
 /// Full analysis requires UCM Pro for repos exceeding this limit.
 const COMMUNITY_ENTITY_LIMIT: usize = 500;
 
 #[derive(Parser)]
-#[command(name = "ucm", version, about = "Unified Context Model — probabilistic impact analysis")]
+#[command(
+    name = "ucm",
+    version,
+    about = "Unified Context Model — probabilistic impact analysis"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -116,13 +120,45 @@ fn main() {
 
     match cli.command {
         Commands::Scan { path, language } => cmd_scan(&path, &language),
-        Commands::Graph { path, export, language } => cmd_graph(&path, export.as_deref(), &language),
+        Commands::Graph {
+            path,
+            export,
+            language,
+        } => cmd_graph(&path, export.as_deref(), &language),
         Commands::Impact {
-            file, symbol, min_confidence, max_depth, json, path, language,
-        } => cmd_impact(&path, &language, &file, &symbol, min_confidence, max_depth, json),
+            file,
+            symbol,
+            min_confidence,
+            max_depth,
+            json,
+            path,
+            language,
+        } => cmd_impact(
+            &path,
+            &language,
+            &file,
+            &symbol,
+            min_confidence,
+            max_depth,
+            json,
+        ),
         Commands::Intent {
-            file, symbol, min_confidence, max_depth, json, path, language,
-        } => cmd_intent(&path, &language, &file, &symbol, min_confidence, max_depth, json),
+            file,
+            symbol,
+            min_confidence,
+            max_depth,
+            json,
+            path,
+            language,
+        } => cmd_intent(
+            &path,
+            &language,
+            &file,
+            &symbol,
+            min_confidence,
+            max_depth,
+            json,
+        ),
     }
 }
 
@@ -139,6 +175,14 @@ fn build_graph(dir: &PathBuf, language: &str) -> UcmGraph {
         _ => vec!["ts", "js", "rs", "py"],
     };
 
+    // Build crate map for Rust cross-crate import resolution.
+    // Scans for Cargo.toml files and maps crate name → src/ directory path.
+    let crate_map = if matches!(language, "rust" | "rs") {
+        build_rust_crate_map(dir)
+    } else {
+        code_parser::RustCrateMap::new()
+    };
+
     let walker = walk_source_files(dir, &extensions);
     for file_path in &walker {
         let source = match std::fs::read_to_string(file_path) {
@@ -152,13 +196,64 @@ fn build_graph(dir: &PathBuf, language: &str) -> UcmGraph {
             .to_string_lossy()
             .to_string();
 
-        let events = code_parser::parse_source_code(&relative, &source, language);
+        let events =
+            code_parser::parse_source_code_with_context(&relative, &source, language, &crate_map);
         for event in &events {
             ucm_events::projection::GraphProjection::apply_event(&mut graph, event);
         }
     }
 
     graph
+}
+
+/// Scan for Cargo.toml files and build a mapping: crate_name → src/ directory path.
+/// e.g. "ucm_core" → "ucm-core/src"
+fn build_rust_crate_map(dir: &PathBuf) -> code_parser::RustCrateMap {
+    let mut map = code_parser::RustCrateMap::new();
+
+    fn scan_for_cargo_tomls(dir: &PathBuf, base: &PathBuf, map: &mut code_parser::RustCrateMap) {
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    let name = path.file_name().unwrap_or_default().to_string_lossy();
+                    if name.starts_with('.') || name == "target" || name == "node_modules" {
+                        continue;
+                    }
+                    scan_for_cargo_tomls(&path, base, map);
+                } else if path.file_name().is_some_and(|n| n == "Cargo.toml") {
+                    // Read crate name from Cargo.toml
+                    if let Ok(content) = std::fs::read_to_string(&path) {
+                        if let Some(name_line) = content.lines().find(|l| l.starts_with("name")) {
+                            let crate_name = name_line
+                                .split('=')
+                                .nth(1)
+                                .map(|s| s.trim().trim_matches('"').to_string())
+                                .unwrap_or_default();
+                            if !crate_name.is_empty() {
+                                // Map underscored crate name to src/ path
+                                let crate_dir = path.parent().unwrap_or(&path);
+                                let src_dir = crate_dir.join("src");
+                                if src_dir.exists() {
+                                    let relative = src_dir
+                                        .strip_prefix(base)
+                                        .unwrap_or(&src_dir)
+                                        .to_string_lossy()
+                                        .to_string();
+                                    // Rust uses underscores in import paths
+                                    let rust_name = crate_name.replace('-', "_");
+                                    map.insert(rust_name, relative);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    scan_for_cargo_tomls(dir, dir, &mut map);
+    map
 }
 
 fn walk_source_files(dir: &PathBuf, extensions: &[&str]) -> Vec<PathBuf> {
@@ -169,8 +264,12 @@ fn walk_source_files(dir: &PathBuf, extensions: &[&str]) -> Vec<PathBuf> {
             if path.is_dir() {
                 // Skip common non-source directories
                 let name = path.file_name().unwrap_or_default().to_string_lossy();
-                if name.starts_with('.') || name == "node_modules" || name == "target"
-                    || name == "dist" || name == "build" || name == "__pycache__"
+                if name.starts_with('.')
+                    || name == "node_modules"
+                    || name == "target"
+                    || name == "dist"
+                    || name == "build"
+                    || name == "__pycache__"
                 {
                     continue;
                 }
@@ -189,8 +288,10 @@ fn check_community_limit(graph: &UcmGraph) -> bool {
     let stats = graph.stats();
     if stats.entity_count > COMMUNITY_ENTITY_LIMIT {
         eprintln!();
-        eprintln!("  This repo has {} entities, exceeding the community edition limit of {}.",
-            stats.entity_count, COMMUNITY_ENTITY_LIMIT);
+        eprintln!(
+            "  This repo has {} entities, exceeding the community edition limit of {}.",
+            stats.entity_count, COMMUNITY_ENTITY_LIMIT
+        );
         eprintln!("  Visit https://ucm.dev/pro for unlimited analysis.");
         eprintln!();
         return false;
@@ -208,7 +309,10 @@ fn cmd_scan(path: &PathBuf, language: &str) {
     println!("  Edges detected:     {}", stats.edge_count);
     println!("  Files tracked:       {}", stats.files_tracked);
     if stats.edge_count > 0 {
-        println!("  Avg confidence:      {:.1}%", stats.avg_confidence * 100.0);
+        println!(
+            "  Avg confidence:      {:.1}%",
+            stats.avg_confidence * 100.0
+        );
     }
     println!();
     println!("  Graph built successfully. Use `ucm impact` to analyze changes.");
@@ -263,20 +367,27 @@ fn cmd_impact(
     enrich_with_ambiguities(&mut report, &graph, 0.60);
 
     if json {
-        println!("{}", serde_json::to_string_pretty(&report).unwrap_or_default());
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&report).unwrap_or_default()
+        );
         return;
     }
 
     // Formatted output
     println!("UCM Impact Analysis");
     println!("====================");
-    println!("  Changed: {}#{}", file, symbol);
+    println!("  Changed: {file}#{symbol}");
     println!();
 
     if !report.direct_impacts.is_empty() {
         println!("  DIRECT IMPACTS:");
         for impact in &report.direct_impacts {
-            println!("    {} — {:.0}% confidence", impact.name, impact.confidence * 100.0);
+            println!(
+                "    {} — {:.0}% confidence",
+                impact.name,
+                impact.confidence * 100.0
+            );
             for step in &impact.explanation_chain.steps {
                 println!("      {}. {}", step.step, step.inference);
             }
@@ -287,7 +398,12 @@ fn cmd_impact(
     if !report.indirect_impacts.is_empty() {
         println!("  INDIRECT IMPACTS:");
         for impact in &report.indirect_impacts {
-            println!("    {} — {:.0}% confidence ({} hops)", impact.name, impact.confidence * 100.0, impact.depth);
+            println!(
+                "    {} — {:.0}% confidence ({} hops)",
+                impact.name,
+                impact.confidence * 100.0,
+                impact.depth
+            );
             for step in &impact.explanation_chain.steps {
                 println!("      {}. {}", step.step, step.inference);
             }
@@ -298,7 +414,12 @@ fn cmd_impact(
     if !report.not_impacted.is_empty() {
         println!("  NOT IMPACTED:");
         for ni in &report.not_impacted {
-            println!("    {} — {:.0}% safe ({})", ni.name, ni.confidence * 100.0, ni.reason);
+            println!(
+                "    {} — {:.0}% safe ({})",
+                ni.name,
+                ni.confidence * 100.0,
+                ni.reason
+            );
         }
         println!();
     }
@@ -333,13 +454,17 @@ fn cmd_intent(
     let intent = generate_test_intent(&report);
 
     if json {
-        println!("{}", serde_json::to_string_pretty(&intent).unwrap_or_default());
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&intent).unwrap_or_default()
+        );
         return;
     }
 
     println!("UCM Test Intent");
     println!("================");
-    println!("  {} scenarios total ({} high, {} medium, {} low)",
+    println!(
+        "  {} scenarios total ({} high, {} medium, {} low)",
         intent.summary.total_scenarios,
         intent.summary.high_count,
         intent.summary.medium_count,
@@ -366,7 +491,10 @@ fn cmd_intent(
     if !intent.risks.is_empty() {
         println!("  RISKS:");
         for r in &intent.risks {
-            println!("    [{:?}] {} — {}", r.severity, r.description, r.mitigation);
+            println!(
+                "    [{:?}] {} — {}",
+                r.severity, r.description, r.mitigation
+            );
         }
         println!();
     }

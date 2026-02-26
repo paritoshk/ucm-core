@@ -14,11 +14,7 @@ use ucm_core::event::*;
 /// - Body changes (implementation details)
 /// - New/removed entities
 /// - Import changes
-pub fn parse_diff(
-    file_path: &str,
-    before: &str,
-    after: &str,
-) -> Vec<UcmEvent> {
+pub fn parse_diff(file_path: &str, before: &str, after: &str) -> Vec<UcmEvent> {
     let mut events = Vec::new();
 
     let before_fns = extract_function_signatures(before);
@@ -98,7 +94,8 @@ fn extract_function_signatures(source: &str) -> std::collections::HashMap<String
             let parts: Vec<&str> = trimmed.split("function ").collect();
             if parts.len() >= 2 {
                 let after = parts.last().unwrap();
-                let name: String = after.chars()
+                let name: String = after
+                    .chars()
                     .take_while(|c| c.is_alphanumeric() || *c == '_')
                     .collect();
                 if !name.is_empty() {
@@ -119,7 +116,8 @@ fn extract_function_signatures(source: &str) -> std::collections::HashMap<String
 
 /// Extract import lines for comparison.
 fn extract_import_lines(source: &str) -> Vec<String> {
-    source.lines()
+    source
+        .lines()
         .filter(|line| line.trim().starts_with("import "))
         .map(|line| line.trim().to_string())
         .collect()
@@ -160,10 +158,18 @@ function validateToken(token: string): Result<Claims, AuthError> {
         let after = "function existing() {}\nfunction newFunction() {}";
 
         let events = parse_diff("src/main.ts", before, after);
-        let added: Vec<_> = events.iter().filter(|e| matches!(
-            &e.payload,
-            EventPayload::ChangeDetected { change_type: ChangeType::EntityAdded, .. }
-        )).collect();
+        let added: Vec<_> = events
+            .iter()
+            .filter(|e| {
+                matches!(
+                    &e.payload,
+                    EventPayload::ChangeDetected {
+                        change_type: ChangeType::EntityAdded,
+                        ..
+                    }
+                )
+            })
+            .collect();
 
         assert!(!added.is_empty());
     }
@@ -174,10 +180,18 @@ function validateToken(token: string): Result<Claims, AuthError> {
         let after = "function toKeep() {}";
 
         let events = parse_diff("src/main.ts", before, after);
-        let removed: Vec<_> = events.iter().filter(|e| matches!(
-            &e.payload,
-            EventPayload::ChangeDetected { change_type: ChangeType::EntityDeleted, .. }
-        )).collect();
+        let removed: Vec<_> = events
+            .iter()
+            .filter(|e| {
+                matches!(
+                    &e.payload,
+                    EventPayload::ChangeDetected {
+                        change_type: ChangeType::EntityDeleted,
+                        ..
+                    }
+                )
+            })
+            .collect();
 
         assert!(!removed.is_empty());
     }

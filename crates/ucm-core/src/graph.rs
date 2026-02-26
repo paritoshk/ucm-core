@@ -16,16 +16,16 @@
 //! - Meta Glean fact stacking: https://glean.software/docs/angle/incrementality
 //! - Sourcegraph SCIP: https://github.com/sourcegraph/scip
 
-use std::collections::{HashMap, HashSet};
-use petgraph::stable_graph::{StableGraph, NodeIndex, EdgeIndex};
+use petgraph::stable_graph::{EdgeIndex, NodeIndex, StableGraph};
 use petgraph::visit::EdgeRef;
 use petgraph::Direction;
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 
-use crate::entity::{UcmEntity, EntityId};
-use crate::edge::{UcmEdge, RelationType};
+use crate::edge::{RelationType, UcmEdge};
+use crate::entity::{EntityId, UcmEntity};
 
-use crate::error::{UcmError, Result};
+use crate::error::{Result, UcmError};
 
 /// The materialized context graph — primary queryable data structure.
 ///
@@ -67,10 +67,7 @@ impl UcmGraph {
         self.entity_index.insert(id_str, idx);
 
         // Track ownership: this file owns this entity
-        self.ownership
-            .entry(file_path)
-            .or_default()
-            .insert(idx);
+        self.ownership.entry(file_path).or_default().insert(idx);
 
         Ok(idx)
     }
@@ -87,7 +84,8 @@ impl UcmGraph {
         } else {
             // add_entity only fails if duplicate — we checked above, so this is safe.
             // Use expect with a clear message rather than unwrap.
-            self.add_entity(entity).expect("add_entity: duplicate despite index miss (logic error)")
+            self.add_entity(entity)
+                .expect("add_entity: duplicate despite index miss (logic error)")
         }
     }
 
@@ -136,7 +134,8 @@ impl UcmGraph {
     /// Get direct dependencies of an entity (outgoing edges).
     pub fn dependencies(&self, id: &EntityId) -> Result<Vec<(&UcmEntity, &UcmEdge)>> {
         let idx = self.resolve_entity(id)?;
-        Ok(self.graph
+        Ok(self
+            .graph
             .edges_directed(idx, Direction::Outgoing)
             .filter_map(|edge| {
                 let target = self.graph.node_weight(edge.target())?;
@@ -152,7 +151,8 @@ impl UcmGraph {
     /// which entities are affected? (Google TAP, Meta PTS)
     pub fn reverse_deps(&self, id: &EntityId) -> Result<Vec<(&UcmEntity, &UcmEdge)>> {
         let idx = self.resolve_entity(id)?;
-        Ok(self.graph
+        Ok(self
+            .graph
             .edges_directed(idx, Direction::Incoming)
             .filter_map(|edge| {
                 let source = self.graph.node_weight(edge.source())?;
@@ -165,9 +165,7 @@ impl UcmGraph {
     pub fn stats(&self) -> GraphStats {
         let edge_count = self.graph.edge_count();
         let avg_confidence = if edge_count > 0 {
-            self.graph.edge_weights()
-                .map(|e| e.confidence)
-                .sum::<f64>() / edge_count as f64
+            self.graph.edge_weights().map(|e| e.confidence).sum::<f64>() / edge_count as f64
         } else {
             0.0
         };
@@ -203,17 +201,21 @@ impl UcmGraph {
     pub fn to_json(&self) -> Result<String> {
         let snapshot = GraphSnapshot {
             entities: self.graph.node_weights().cloned().collect(),
-            edges: self.graph.edge_indices().filter_map(|idx| {
-                let (source, target) = self.graph.edge_endpoints(idx)?;
-                let source_entity = self.graph.node_weight(source)?;
-                let target_entity = self.graph.node_weight(target)?;
-                let edge = self.graph.edge_weight(idx)?;
-                Some(EdgeSnapshot {
-                    from: source_entity.id.clone(),
-                    to: target_entity.id.clone(),
-                    edge: edge.clone(),
+            edges: self
+                .graph
+                .edge_indices()
+                .filter_map(|idx| {
+                    let (source, target) = self.graph.edge_endpoints(idx)?;
+                    let source_entity = self.graph.node_weight(source)?;
+                    let target_entity = self.graph.node_weight(target)?;
+                    let edge = self.graph.edge_weight(idx)?;
+                    Some(EdgeSnapshot {
+                        from: source_entity.id.clone(),
+                        to: target_entity.id.clone(),
+                        edge: edge.clone(),
+                    })
                 })
-            }).collect(),
+                .collect(),
         };
         Ok(serde_json::to_string_pretty(&snapshot)?)
     }
@@ -226,7 +228,6 @@ impl UcmGraph {
             .copied()
             .ok_or_else(|| UcmError::EntityNotFound(id.as_str().to_string()))
     }
-
 }
 
 impl Default for UcmGraph {
@@ -310,8 +311,8 @@ pub struct GraphStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::entity::*;
     use crate::edge::*;
+    use crate::entity::*;
 
     fn make_test_graph() -> UcmGraph {
         let mut graph = UcmGraph::new();
@@ -375,28 +376,32 @@ mod tests {
         graph.add_entity(admin).unwrap();
 
         // middleware imports validateToken
-        graph.add_relationship(
-            &EntityId::local("src/api/middleware.ts", "authMiddleware"),
-            &EntityId::local("src/auth/service.ts", "validateToken"),
-            UcmEdge::new(
-                RelationType::Imports,
-                DiscoverySource::StaticAnalysis,
-                0.95,
-                "imports validateToken directly",
-            ),
-        ).unwrap();
+        graph
+            .add_relationship(
+                &EntityId::local("src/api/middleware.ts", "authMiddleware"),
+                &EntityId::local("src/auth/service.ts", "validateToken"),
+                UcmEdge::new(
+                    RelationType::Imports,
+                    DiscoverySource::StaticAnalysis,
+                    0.95,
+                    "imports validateToken directly",
+                ),
+            )
+            .unwrap();
 
         // payment depends on middleware (protected route)
-        graph.add_relationship(
-            &EntityId::local("src/payments/checkout.ts", "processPayment"),
-            &EntityId::local("src/api/middleware.ts", "authMiddleware"),
-            UcmEdge::new(
-                RelationType::DependsOn,
-                DiscoverySource::StaticAnalysis,
-                0.80,
-                "route uses authMiddleware",
-            ),
-        ).unwrap();
+        graph
+            .add_relationship(
+                &EntityId::local("src/payments/checkout.ts", "processPayment"),
+                &EntityId::local("src/api/middleware.ts", "authMiddleware"),
+                UcmEdge::new(
+                    RelationType::DependsOn,
+                    DiscoverySource::StaticAnalysis,
+                    0.80,
+                    "route uses authMiddleware",
+                ),
+            )
+            .unwrap();
 
         // admin has NO connection to auth
         // (separate auth flow — this tests "not impacted" logic)
@@ -443,11 +448,15 @@ mod tests {
     #[test]
     fn test_file_invalidation() {
         let mut graph = make_test_graph();
-        assert!(graph.get_entity(&EntityId::local("src/auth/service.ts", "validateToken")).is_some());
+        assert!(graph
+            .get_entity(&EntityId::local("src/auth/service.ts", "validateToken"))
+            .is_some());
 
         let removed = graph.invalidate_file("src/auth/service.ts");
         assert_eq!(removed.len(), 1);
-        assert!(graph.get_entity(&EntityId::local("src/auth/service.ts", "validateToken")).is_none());
+        assert!(graph
+            .get_entity(&EntityId::local("src/auth/service.ts", "validateToken"))
+            .is_none());
     }
 
     #[test]

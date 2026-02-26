@@ -3,11 +3,11 @@
 //! Supports: append, replay, query by ID, stream by source,
 //! and checkpoint-based resume.
 
+use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
 
-use ucm_core::event::{UcmEvent, EventPayload};
+use ucm_core::event::{EventPayload, UcmEvent};
 
 /// Append-only in-memory event store.
 ///
@@ -41,10 +41,7 @@ impl EventStore {
 
         // Index by stream (extract file path from event payload)
         if let Some(stream_key) = Self::extract_stream_key(&event.payload) {
-            self.stream_index
-                .entry(stream_key)
-                .or_default()
-                .push(pos);
+            self.stream_index.entry(stream_key).or_default().push(pos);
         }
 
         self.events.push(event);
@@ -65,7 +62,9 @@ impl EventStore {
     /// Replay all events from the beginning (or from a timestamp).
     pub fn replay(&self, from: Option<DateTime<Utc>>) -> Vec<&UcmEvent> {
         match from {
-            Some(timestamp) => self.events.iter()
+            Some(timestamp) => self
+                .events
+                .iter()
                 .filter(|e| e.timestamp >= timestamp)
                 .collect(),
             None => self.events.iter().collect(),
@@ -87,7 +86,8 @@ impl EventStore {
         self.stream_index
             .get(stream_key)
             .map(|positions| {
-                positions.iter()
+                positions
+                    .iter()
                     .filter_map(|&pos| self.events.get(pos))
                     .collect()
             })

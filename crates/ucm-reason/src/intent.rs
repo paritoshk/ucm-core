@@ -9,10 +9,10 @@
 //! Each recommendation includes an explanation chain
 //! showing WHY the system recommends testing this scenario.
 
+use crate::explanation::ExplanationChain;
+use crate::impact::ImpactReport;
 use serde::{Deserialize, Serialize};
 use ucm_core::edge::ConfidenceTier;
-use crate::impact::ImpactReport;
-use crate::explanation::ExplanationChain;
 
 /// Complete test intent output — what to test and why.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -146,9 +146,8 @@ pub fn generate_test_intent(report: &ImpactReport) -> TestIntent {
             confidence: impact.confidence * 0.9,
             related_entity: impact.name.clone(),
             explanation_chain: {
-                let mut chain = ExplanationChain::new(
-                    format!("Error handling test for {}", impact.name)
-                );
+                let mut chain =
+                    ExplanationChain::new(format!("Error handling test for {}", impact.name));
                 chain.add_step(
                     "Direct dependency on changed code",
                     "Error paths may also be affected by the change",
@@ -186,7 +185,9 @@ pub fn generate_test_intent(report: &ImpactReport) -> TestIntent {
                 severity: RiskSeverity::Medium,
                 description: format!(
                     "{} is indirectly affected via {}-hop chain with {:.0}% confidence",
-                    impact.name, impact.depth, impact.confidence * 100.0
+                    impact.name,
+                    impact.depth,
+                    impact.confidence * 100.0
                 ),
                 mitigation: format!(
                     "Integration test covering the path: {}",
@@ -197,12 +198,22 @@ pub fn generate_test_intent(report: &ImpactReport) -> TestIntent {
     }
 
     // Check for coverage gaps among impacted entities
-    for impact in report.direct_impacts.iter().chain(report.indirect_impacts.iter()) {
+    for impact in report
+        .direct_impacts
+        .iter()
+        .chain(report.indirect_impacts.iter())
+    {
         // If we don't see any test entities connected, flag as gap
         coverage_gaps.push(CoverageGap {
             entity: impact.name.clone(),
-            description: format!("{} is impacted but has no linked test coverage in the graph", impact.name),
-            recommendation: format!("Add test coverage for {} focusing on the changed behavior", impact.name),
+            description: format!(
+                "{} is impacted but has no linked test coverage in the graph",
+                impact.name
+            ),
+            recommendation: format!(
+                "Add test coverage for {} focusing on the changed behavior",
+                impact.name
+            ),
         });
     }
 
@@ -248,10 +259,10 @@ pub fn generate_test_intent(report: &ImpactReport) -> TestIntent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ucm_core::entity::*;
-    use ucm_core::edge::*;
-    use ucm_core::graph::UcmGraph;
     use crate::impact::analyze_impact;
+    use ucm_core::edge::*;
+    use ucm_core::entity::*;
+    use ucm_core::graph::UcmGraph;
 
     #[test]
     fn test_generate_test_intent() {
@@ -261,26 +272,53 @@ mod tests {
         for (file, symbol, name) in &[
             ("src/auth/service.ts", "validateToken", "validateToken"),
             ("src/api/middleware.ts", "authMiddleware", "authMiddleware"),
-            ("src/payments/checkout.ts", "processPayment", "processPayment"),
+            (
+                "src/payments/checkout.ts",
+                "processPayment",
+                "processPayment",
+            ),
         ] {
-            graph.add_entity(UcmEntity::new(
-                EntityId::local(file, symbol),
-                EntityKind::Function { is_async: true, parameter_count: 1, return_type: None },
-                *name, *file, "typescript", DiscoverySource::StaticAnalysis,
-            )).unwrap();
+            graph
+                .add_entity(UcmEntity::new(
+                    EntityId::local(file, symbol),
+                    EntityKind::Function {
+                        is_async: true,
+                        parameter_count: 1,
+                        return_type: None,
+                    },
+                    *name,
+                    *file,
+                    "typescript",
+                    DiscoverySource::StaticAnalysis,
+                ))
+                .unwrap();
         }
 
-        graph.add_relationship(
-            &EntityId::local("src/api/middleware.ts", "authMiddleware"),
-            &EntityId::local("src/auth/service.ts", "validateToken"),
-            UcmEdge::new(RelationType::Imports, DiscoverySource::StaticAnalysis, 0.95, "imports"),
-        ).unwrap();
+        graph
+            .add_relationship(
+                &EntityId::local("src/api/middleware.ts", "authMiddleware"),
+                &EntityId::local("src/auth/service.ts", "validateToken"),
+                UcmEdge::new(
+                    RelationType::Imports,
+                    DiscoverySource::StaticAnalysis,
+                    0.95,
+                    "imports",
+                ),
+            )
+            .unwrap();
 
-        graph.add_relationship(
-            &EntityId::local("src/payments/checkout.ts", "processPayment"),
-            &EntityId::local("src/api/middleware.ts", "authMiddleware"),
-            UcmEdge::new(RelationType::DependsOn, DiscoverySource::StaticAnalysis, 0.80, "depends"),
-        ).unwrap();
+        graph
+            .add_relationship(
+                &EntityId::local("src/payments/checkout.ts", "processPayment"),
+                &EntityId::local("src/api/middleware.ts", "authMiddleware"),
+                UcmEdge::new(
+                    RelationType::DependsOn,
+                    DiscoverySource::StaticAnalysis,
+                    0.80,
+                    "depends",
+                ),
+            )
+            .unwrap();
 
         let changed = vec![EntityId::local("src/auth/service.ts", "validateToken")];
         let report = analyze_impact(&graph, &changed, 0.1, 10);

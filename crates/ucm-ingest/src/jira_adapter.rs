@@ -1,9 +1,9 @@
 //! Jira/ticket adapter — converts ticket JSON into Requirement entities.
 
-use ucm_core::entity::*;
-use ucm_core::edge::*;
-use ucm_core::event::*;
 use serde::{Deserialize, Serialize};
+use ucm_core::edge::*;
+use ucm_core::entity::*;
+use ucm_core::event::*;
 
 /// A simplified Jira ticket structure.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -37,7 +37,10 @@ pub fn ingest_ticket(ticket: &JiraTicket) -> Vec<UcmEvent> {
 
     // Also create a Feature entity from the ticket
     events.push(UcmEvent::new(EventPayload::EntityDiscovered {
-        entity_id: EntityId::local(&format!("jira/{}", ticket.key), &format!("feature:{}", ticket.key)),
+        entity_id: EntityId::local(
+            &format!("jira/{}", ticket.key),
+            &format!("feature:{}", ticket.key),
+        ),
         kind: EntityKind::Feature {
             description: ticket.description.clone(),
             source: "jira".to_string(),
@@ -94,10 +97,16 @@ mod tests {
         };
 
         let events = ingest_ticket(&ticket);
-        assert!(events.len() >= 2, "Should create requirement + feature entities");
+        assert!(
+            events.len() >= 2,
+            "Should create requirement + feature entities"
+        );
 
         // Check that dependency was created
-        let deps: Vec<_> = events.iter().filter(|e| matches!(&e.payload, EventPayload::DependencyLinked { .. })).collect();
+        let deps: Vec<_> = events
+            .iter()
+            .filter(|e| matches!(&e.payload, EventPayload::DependencyLinked { .. }))
+            .collect();
         assert_eq!(deps.len(), 1, "Should link file to requirement");
     }
 }

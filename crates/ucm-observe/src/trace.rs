@@ -1,9 +1,9 @@
 //! Decision trace — structured record of every reasoning decision.
 
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use ucm_core::entity::EntityId;
+use uuid::Uuid;
 
 /// A recorded reasoning decision — the atomic unit of auditability.
 ///
@@ -72,17 +72,24 @@ impl TraceStore {
 
     /// Get traces for a specific trigger event.
     pub fn by_trigger(&self, trigger_id: &Uuid) -> Vec<&DecisionTrace> {
-        self.traces.iter()
+        self.traces
+            .iter()
             .filter(|t| t.trigger_event_id == *trigger_id)
             .collect()
     }
 
-    pub fn len(&self) -> usize { self.traces.len() }
-    pub fn is_empty(&self) -> bool { self.traces.is_empty() }
+    pub fn len(&self) -> usize {
+        self.traces.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.traces.is_empty()
+    }
 }
 
 impl Default for TraceStore {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 /// Build a decision trace from an impact analysis run.
@@ -102,7 +109,13 @@ pub fn trace_impact_analysis(
         step: 1,
         operation: "enumerate_changes".into(),
         input: format!("{} entities changed", changed_entities.len()),
-        output: format!("Change set: {:?}", changed_entities.iter().map(|e| e.as_str()).collect::<Vec<_>>()),
+        output: format!(
+            "Change set: {:?}",
+            changed_entities
+                .iter()
+                .map(|e| e.as_str())
+                .collect::<Vec<_>>()
+        ),
         confidence: 1.0,
         timestamp: now,
     });
@@ -110,8 +123,8 @@ pub fn trace_impact_analysis(
     steps.push(TraceStep {
         step: 2,
         operation: "reverse_bfs".into(),
-        input: format!("Graph with {} entities", graph_entity_count),
-        output: format!("{} direct + {} indirect impacts found", direct_count, indirect_count),
+        input: format!("Graph with {graph_entity_count} entities"),
+        output: format!("{direct_count} direct + {indirect_count} indirect impacts found"),
         confidence: 0.95,
         timestamp: now,
     });
@@ -119,8 +132,8 @@ pub fn trace_impact_analysis(
     steps.push(TraceStep {
         step: 3,
         operation: "classify_not_impacted".into(),
-        input: format!("{} remaining entities", not_impacted_count),
-        output: format!("{} entities determined not impacted with explanations", not_impacted_count),
+        input: format!("{not_impacted_count} remaining entities"),
+        output: format!("{not_impacted_count} entities determined not impacted with explanations"),
         confidence: 0.90,
         timestamp: now,
     });
@@ -129,13 +142,13 @@ pub fn trace_impact_analysis(
         trace_id: Uuid::now_v7(),
         timestamp: now,
         trigger_event_id,
-        graph_state_hash: format!("entities:{}", graph_entity_count),
-        analyzed_entities: changed_entities.iter().map(|e| e.as_str().to_string()).collect(),
+        graph_state_hash: format!("entities:{graph_entity_count}"),
+        analyzed_entities: changed_entities
+            .iter()
+            .map(|e| e.as_str().to_string())
+            .collect(),
         reasoning_steps: steps,
-        output_summary: format!(
-            "Impact analysis: {} direct, {} indirect, {} not impacted",
-            direct_count, indirect_count, not_impacted_count
-        ),
+        output_summary: format!("Impact analysis: {direct_count} direct, {indirect_count} indirect, {not_impacted_count} not impacted"),
         duration_ms,
     }
 }
@@ -153,7 +166,9 @@ mod tests {
             trigger_id,
             10,
             &[EntityId::local("src/auth.ts", "validateToken")],
-            2, 3, 5,
+            2,
+            3,
+            5,
             42,
         );
         let trace_id = trace.trace_id;
@@ -172,7 +187,9 @@ mod tests {
             Uuid::now_v7(),
             10,
             &[EntityId::local("src/main.ts", "main")],
-            1, 2, 7,
+            1,
+            2,
+            7,
             15,
         );
 

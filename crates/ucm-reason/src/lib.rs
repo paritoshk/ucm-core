@@ -13,12 +13,12 @@
 //! (what conclusion), and confidence (how sure). This is the
 //! "show your work" layer that makes the system auditable.
 
+pub mod ambiguity;
+pub mod explanation;
 pub mod impact;
 pub mod intent;
-pub mod explanation;
-pub mod ambiguity;
 
+pub use ambiguity::*;
+pub use explanation::*;
 pub use impact::*;
 pub use intent::*;
-pub use explanation::*;
-pub use ambiguity::*;

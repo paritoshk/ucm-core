@@ -28,7 +28,7 @@ use std::sync::{Arc, Mutex};
 use tower_http::cors::CorsLayer;
 use uuid::Uuid;
 
-use ucm_core::edge::{UcmEdge, RelationType};
+use ucm_core::edge::{RelationType, UcmEdge};
 use ucm_core::entity::*;
 use ucm_core::graph::UcmGraph;
 use ucm_events::projection::GraphProjection;
@@ -352,7 +352,12 @@ async fn graph_entities(State(state): State<Arc<AppState>>) -> Json<Vec<ApiEntit
             id: e.id.as_str().to_string(),
             name: e.name.clone(),
             file_path: e.file_path.clone(),
-            kind: format!("{:?}", e.kind).split('{').next().unwrap_or("Unknown").trim().to_string(),
+            kind: format!("{:?}", e.kind)
+                .split('{')
+                .next()
+                .unwrap_or("Unknown")
+                .trim()
+                .to_string(),
         })
         .collect();
     Json(entities)
@@ -363,16 +368,18 @@ async fn graph_edges(State(state): State<Arc<AppState>>) -> Json<Vec<ApiEdge>> {
     // Use to_json() to get edge snapshot data, then map
     match graph.to_json() {
         Ok(json_str) => {
-            let snapshot: serde_json::Value =
-                serde_json::from_str(&json_str).unwrap_or_default();
+            let snapshot: serde_json::Value = serde_json::from_str(&json_str).unwrap_or_default();
             let edges: Vec<ApiEdge> = snapshot["edges"]
                 .as_array()
                 .unwrap_or(&vec![])
                 .iter()
                 .map(|e| ApiEdge {
-                    from: e["from"]["raw"].as_str().unwrap_or("").to_string(),
-                    to: e["to"]["raw"].as_str().unwrap_or("").to_string(),
-                    relation: e["edge"]["relation_type"].as_str().unwrap_or("").to_string(),
+                    from: e["from"].as_str().unwrap_or("").to_string(),
+                    to: e["to"].as_str().unwrap_or("").to_string(),
+                    relation: e["edge"]["relation_type"]
+                        .as_str()
+                        .unwrap_or("")
+                        .to_string(),
                     confidence: e["edge"]["confidence"].as_f64().unwrap_or(0.0),
                 })
                 .collect();
@@ -395,8 +402,17 @@ async fn ingest_code(
     State(state): State<Arc<AppState>>,
     Json(req): Json<IngestCodeRequest>,
 ) -> Json<serde_json::Value> {
+    use ucm_core::event::EventPayload;
     let events = code_parser::parse_source_code(&req.file_path, &req.source, &req.language);
-    let event_count = events.len();
+
+    let entities_discovered = events
+        .iter()
+        .filter(|e| matches!(&e.payload, EventPayload::EntityDiscovered { .. }))
+        .count();
+    let relationships_detected = events
+        .iter()
+        .filter(|e| matches!(&e.payload, EventPayload::DependencyLinked { .. }))
+        .count();
 
     {
         let mut store = state.event_store.lock().unwrap();
@@ -409,7 +425,11 @@ async fn ingest_code(
 
     Json(serde_json::json!({
         "status": "ingested",
-        "events_created": event_count
+        "entities_discovered": entities_discovered,
+        "relationships_detected": relationships_detected,
+        // Note: relationships_detected counts edges emitted by the parser.
+        // Edges pointing to entities not yet in the graph are held pending
+        // until those entities are ingested (ingest all files for full graph).
     }))
 }
 
@@ -590,9 +610,7 @@ async fn connect_linear(
     })))
 }
 
-async fn linear_status(
-    State(state): State<Arc<AppState>>,
-) -> Json<serde_json::Value> {
+async fn linear_status(State(state): State<Arc<AppState>>) -> Json<serde_json::Value> {
     let has_key = state.linear_api_key.lock().unwrap().is_some();
     let workspace = state.linear_workspace.lock().unwrap().clone();
 

@@ -6,9 +6,9 @@
 //! 3. Compare the result with the stored trace
 //! 4. Report any divergences (non-determinism bugs)
 
+use crate::trace::DecisionTrace;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use crate::trace::DecisionTrace;
 
 /// Result of a replay verification.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -43,7 +43,10 @@ pub fn compare_traces(original: &DecisionTrace, replayed: &DecisionTrace) -> Rep
     }
 
     // Compare individual steps
-    let min_steps = original.reasoning_steps.len().min(replayed.reasoning_steps.len());
+    let min_steps = original
+        .reasoning_steps
+        .len()
+        .min(replayed.reasoning_steps.len());
     for i in 0..min_steps {
         let orig = &original.reasoning_steps[i];
         let replay = &replayed.reasoning_steps[i];

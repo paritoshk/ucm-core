@@ -10,9 +10,9 @@
 //! - Temporal decay rates vary by discovery source
 //! - Each edge tracks its full evidence provenance chain
 
-use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc};
 use crate::entity::DiscoverySource;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 
 /// The type of relationship between two entities.
 ///
@@ -113,7 +113,12 @@ impl UcmEdge {
     ///
     /// When sources agree, confidence compounds; when they conflict,
     /// the system expresses uncertainty rather than picking a winner.
-    pub fn add_evidence(&mut self, source: DiscoverySource, confidence: f64, description: impl Into<String>) {
+    pub fn add_evidence(
+        &mut self,
+        source: DiscoverySource,
+        confidence: f64,
+        description: impl Into<String>,
+    ) {
         self.evidence.push(EvidenceSource {
             source,
             confidence,
@@ -125,7 +130,11 @@ impl UcmEdge {
         // P(edge) = 1 - Π(1 - P(source_i))
         // This compounds agreement and expresses uncertainty on conflict.
         self.confidence = crate::confidence::noisy_or(
-            &self.evidence.iter().map(|e| e.confidence).collect::<Vec<_>>()
+            &self
+                .evidence
+                .iter()
+                .map(|e| e.confidence)
+                .collect::<Vec<_>>(),
         );
 
         self.verified_at = Some(Utc::now());

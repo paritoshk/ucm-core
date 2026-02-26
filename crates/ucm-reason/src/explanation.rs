@@ -66,9 +66,7 @@ impl ExplanationChain {
             confidence,
         });
         // Update overall confidence as product
-        self.overall_confidence = self.steps.iter()
-            .map(|s| s.confidence)
-            .product();
+        self.overall_confidence = self.steps.iter().map(|s| s.confidence).product();
         self
     }
 
@@ -78,7 +76,10 @@ impl ExplanationChain {
         for step in &self.steps {
             narrative.push_str(&format!(
                 "Step {}: Based on {} → concluded {} (confidence: {:.0}%)\n",
-                step.step, step.evidence, step.inference, step.confidence * 100.0
+                step.step,
+                step.evidence,
+                step.inference,
+                step.confidence * 100.0
             ));
         }
         narrative.push_str(&format!(
@@ -90,14 +91,8 @@ impl ExplanationChain {
 }
 
 /// Build an explanation for why an entity IS impacted.
-pub fn explain_impact(
-    entity_name: &str,
-    path: &[String],
-    confidence: f64,
-) -> ExplanationChain {
-    let mut chain = ExplanationChain::new(format!(
-        "{entity_name} is impacted by this change"
-    ));
+pub fn explain_impact(entity_name: &str, path: &[String], confidence: f64) -> ExplanationChain {
+    let mut chain = ExplanationChain::new(format!("{entity_name} is impacted by this change"));
 
     if path.len() <= 1 {
         chain.add_step(
@@ -107,8 +102,14 @@ pub fn explain_impact(
         );
     } else {
         chain.add_step(
-            format!("Graph traversal found dependency path: {}", path.join(" → ")),
-            format!("{entity_name} is transitively dependent via {} hops", path.len() - 1),
+            format!(
+                "Graph traversal found dependency path: {}",
+                path.join(" → ")
+            ),
+            format!(
+                "{entity_name} is transitively dependent via {} hops",
+                path.len() - 1
+            ),
             confidence,
         );
 
@@ -125,14 +126,8 @@ pub fn explain_impact(
 }
 
 /// Build an explanation for why an entity is NOT impacted.
-pub fn explain_not_impacted(
-    entity_name: &str,
-    reason: &str,
-    confidence: f64,
-) -> ExplanationChain {
-    let mut chain = ExplanationChain::new(format!(
-        "{entity_name} is NOT impacted by this change"
-    ));
+pub fn explain_not_impacted(entity_name: &str, reason: &str, confidence: f64) -> ExplanationChain {
+    let mut chain = ExplanationChain::new(format!("{entity_name} is NOT impacted by this change"));
 
     chain.add_step(
         format!("Analyzed graph connectivity for {entity_name}"),
@@ -173,7 +168,11 @@ mod tests {
     fn test_explain_impact() {
         let chain = explain_impact(
             "processPayment",
-            &["validateToken".into(), "authMiddleware".into(), "processPayment".into()],
+            &[
+                "validateToken".into(),
+                "authMiddleware".into(),
+                "processPayment".into(),
+            ],
             0.72,
         );
         assert!(!chain.steps.is_empty());

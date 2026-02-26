@@ -9,14 +9,14 @@
 //!   predictive feature for test relevance
 //! - Test failure likelihood diminishes beyond MinDist=10
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use crate::explanation::{explain_impact, explain_not_impacted, ExplanationChain};
 use petgraph::visit::EdgeRef;
 use petgraph::Direction;
 use serde::{Deserialize, Serialize};
-use ucm_core::entity::EntityId;
+use std::collections::{HashMap, HashSet, VecDeque};
 use ucm_core::edge::ConfidenceTier;
-use ucm_core::graph::{UcmGraph, ImpactedEntity, ImpactType, NotImpactedEntity};
-use crate::explanation::{ExplanationChain, explain_impact, explain_not_impacted};
+use ucm_core::entity::EntityId;
+use ucm_core::graph::{ImpactType, ImpactedEntity, NotImpactedEntity, UcmGraph};
 
 /// Full impact report for a change set — the primary output of the reasoning engine.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -103,15 +103,18 @@ pub fn impact_bfs(
     for id in changed {
         if let Some(idx) = graph.entity_node_index(id) {
             let entity = inner.node_weight(idx).unwrap();
-            visited.insert(idx, ImpactedEntity {
-                entity_id: id.clone(),
-                name: entity.name.clone(),
-                confidence: 1.0,
-                depth: 0,
-                impact_type: ImpactType::Direct,
-                path: vec![id.as_str().to_string()],
-                reason: "Directly changed".to_string(),
-            });
+            visited.insert(
+                idx,
+                ImpactedEntity {
+                    entity_id: id.clone(),
+                    name: entity.name.clone(),
+                    confidence: 1.0,
+                    depth: 0,
+                    impact_type: ImpactType::Direct,
+                    path: vec![id.as_str().to_string()],
+                    reason: "Directly changed".to_string(),
+                },
+            );
             queue.push_back((idx, 1.0, 0, vec![id.as_str().to_string()]));
         }
     }
@@ -169,11 +172,13 @@ pub fn impact_bfs(
         }
     }
 
-    let changed_indices: HashSet<_> = changed.iter()
+    let changed_indices: HashSet<_> = changed
+        .iter()
         .filter_map(|id| graph.entity_node_index(id))
         .collect();
 
-    visited.into_iter()
+    visited
+        .into_iter()
         .filter(|(idx, _)| !changed_indices.contains(idx))
         .map(|(_, impact)| impact)
         .collect()
@@ -192,8 +197,7 @@ pub fn find_not_impacted(
     inner
         .node_weights()
         .filter(|entity| {
-            !changed_set.contains(entity.id.as_str())
-                && !impacted_set.contains(entity.id.as_str())
+            !changed_set.contains(entity.id.as_str()) && !impacted_set.contains(entity.id.as_str())
         })
         .map(|entity| {
             let has_path = has_path_to_any(graph, &entity.id, changed);
@@ -219,7 +223,8 @@ fn has_path_to_any(graph: &UcmGraph, from: &EntityId, targets: &[EntityId]) -> b
         Some(idx) => idx,
         None => return false,
     };
-    let target_indices: HashSet<_> = targets.iter()
+    let target_indices: HashSet<_> = targets
+        .iter()
         .filter_map(|id| graph.entity_node_index(id))
         .collect();
 
@@ -271,7 +276,7 @@ pub fn analyze_impact(
             entity_id: impact.entity_id.as_str().to_string(),
             name: impact.name.clone(),
             confidence: impact.confidence,
-            tier: format!("{} {}", tier.emoji(), format!("{:?}", tier)),
+            tier: format!("{} {:?}", tier.emoji(), tier),
             depth: impact.depth,
             path: impact.path.clone(),
             reason: impact.reason.clone(),
@@ -287,27 +292,35 @@ pub fn analyze_impact(
     }
 
     // Build not-impacted entries with explanations
-    let not_impacted: Vec<NotImpactedEntry> = not_impacted_entities.iter().map(|ni| {
-        let explanation = explain_not_impacted(&ni.name, &ni.reason, ni.confidence);
-        NotImpactedEntry {
-            entity_id: ni.entity_id.as_str().to_string(),
-            name: ni.name.clone(),
-            confidence: ni.confidence,
-            reason: ni.reason.clone(),
-            explanation_chain: explanation,
-        }
-    }).collect();
+    let not_impacted: Vec<NotImpactedEntry> = not_impacted_entities
+        .iter()
+        .map(|ni| {
+            let explanation = explain_not_impacted(&ni.name, &ni.reason, ni.confidence);
+            NotImpactedEntry {
+                entity_id: ni.entity_id.as_str().to_string(),
+                name: ni.name.clone(),
+                confidence: ni.confidence,
+                reason: ni.reason.clone(),
+                explanation_chain: explanation,
+            }
+        })
+        .collect();
 
     // Build change descriptions
-    let changes: Vec<ChangeDescription> = changed_entities.iter().map(|id| {
-        let entity = graph.get_entity(id);
-        ChangeDescription {
-            entity_id: id.as_str().to_string(),
-            name: entity.map(|e| e.name.clone()).unwrap_or_else(|| "Unknown".into()),
-            change_type: "Modified".into(),
-            file_path: entity.map(|e| e.file_path.clone()).unwrap_or_default(),
-        }
-    }).collect();
+    let changes: Vec<ChangeDescription> = changed_entities
+        .iter()
+        .map(|id| {
+            let entity = graph.get_entity(id);
+            ChangeDescription {
+                entity_id: id.as_str().to_string(),
+                name: entity
+                    .map(|e| e.name.clone())
+                    .unwrap_or_else(|| "Unknown".into()),
+                change_type: "Modified".into(),
+                file_path: entity.map(|e| e.file_path.clone()).unwrap_or_default(),
+            }
+        })
+        .collect();
 
     let stats = ImpactStats {
         total_entities: graph.stats().entity_count,
@@ -330,8 +343,8 @@ pub fn analyze_impact(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ucm_core::entity::*;
     use ucm_core::edge::*;
+    use ucm_core::entity::*;
 
     fn build_test_graph() -> UcmGraph {
         let mut graph = UcmGraph::new();
@@ -339,34 +352,58 @@ mod tests {
         let entities = vec![
             ("src/auth/service.ts", "validateToken", "validateToken"),
             ("src/api/middleware.ts", "authMiddleware", "authMiddleware"),
-            ("src/payments/checkout.ts", "processPayment", "processPayment"),
+            (
+                "src/payments/checkout.ts",
+                "processPayment",
+                "processPayment",
+            ),
             ("src/admin/reports.ts", "generateReport", "generateReport"),
         ];
 
         for (file, symbol, name) in &entities {
-            graph.add_entity(UcmEntity::new(
-                EntityId::local(file, symbol),
-                EntityKind::Function { is_async: true, parameter_count: 1, return_type: None },
-                *name,
-                *file,
-                "typescript",
-                DiscoverySource::StaticAnalysis,
-            )).unwrap();
+            graph
+                .add_entity(UcmEntity::new(
+                    EntityId::local(file, symbol),
+                    EntityKind::Function {
+                        is_async: true,
+                        parameter_count: 1,
+                        return_type: None,
+                    },
+                    *name,
+                    *file,
+                    "typescript",
+                    DiscoverySource::StaticAnalysis,
+                ))
+                .unwrap();
         }
 
         // middleware → validateToken
-        graph.add_relationship(
-            &EntityId::local("src/api/middleware.ts", "authMiddleware"),
-            &EntityId::local("src/auth/service.ts", "validateToken"),
-            UcmEdge::new(RelationType::Imports, DiscoverySource::StaticAnalysis, 0.95, "imports directly"),
-        ).unwrap();
+        graph
+            .add_relationship(
+                &EntityId::local("src/api/middleware.ts", "authMiddleware"),
+                &EntityId::local("src/auth/service.ts", "validateToken"),
+                UcmEdge::new(
+                    RelationType::Imports,
+                    DiscoverySource::StaticAnalysis,
+                    0.95,
+                    "imports directly",
+                ),
+            )
+            .unwrap();
 
         // processPayment → middleware
-        graph.add_relationship(
-            &EntityId::local("src/payments/checkout.ts", "processPayment"),
-            &EntityId::local("src/api/middleware.ts", "authMiddleware"),
-            UcmEdge::new(RelationType::DependsOn, DiscoverySource::StaticAnalysis, 0.80, "uses auth middleware"),
-        ).unwrap();
+        graph
+            .add_relationship(
+                &EntityId::local("src/payments/checkout.ts", "processPayment"),
+                &EntityId::local("src/api/middleware.ts", "authMiddleware"),
+                UcmEdge::new(
+                    RelationType::DependsOn,
+                    DiscoverySource::StaticAnalysis,
+                    0.80,
+                    "uses auth middleware",
+                ),
+            )
+            .unwrap();
 
         graph
     }
@@ -379,16 +416,31 @@ mod tests {
         let report = analyze_impact(&graph, &changed, 0.1, 10);
 
         // Should have direct impacts
-        assert!(!report.direct_impacts.is_empty(), "Should have direct impacts");
-        assert!(report.direct_impacts.iter().any(|i| i.name == "authMiddleware"));
+        assert!(
+            !report.direct_impacts.is_empty(),
+            "Should have direct impacts"
+        );
+        assert!(report
+            .direct_impacts
+            .iter()
+            .any(|i| i.name == "authMiddleware"));
 
         // Should have indirect impacts
-        assert!(!report.indirect_impacts.is_empty(), "Should have indirect impacts");
-        assert!(report.indirect_impacts.iter().any(|i| i.name == "processPayment"));
+        assert!(
+            !report.indirect_impacts.is_empty(),
+            "Should have indirect impacts"
+        );
+        assert!(report
+            .indirect_impacts
+            .iter()
+            .any(|i| i.name == "processPayment"));
 
         // Should have not-impacted
         assert!(!report.not_impacted.is_empty(), "Should have not-impacted");
-        assert!(report.not_impacted.iter().any(|n| n.name == "generateReport"));
+        assert!(report
+            .not_impacted
+            .iter()
+            .any(|n| n.name == "generateReport"));
 
         // All entries should have explanation chains
         for impact in &report.direct_impacts {

@@ -10,11 +10,11 @@
 //! Schema evolution uses additive-only changes plus upcasting.
 //! Reference: Event Sourcing best practices (Microsoft, Greg Young)
 
+use crate::edge::RelationType;
+use crate::entity::{DiscoverySource, EntityId, EntityKind};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
-use crate::entity::{EntityId, EntityKind, DiscoverySource};
-use crate::edge::RelationType;
 
 /// A mutation event in the context graph's append-only log.
 ///
@@ -49,10 +49,7 @@ pub enum EventPayload {
     },
 
     /// An entity was removed (file deleted, function removed, etc.)
-    EntityRemoved {
-        entity_id: EntityId,
-        reason: String,
-    },
+    EntityRemoved { entity_id: EntityId, reason: String },
 
     /// A relationship between entities was discovered
     DependencyLinked {
