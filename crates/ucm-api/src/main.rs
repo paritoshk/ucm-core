@@ -17,7 +17,7 @@
 
 use axum::{
     extract::State,
-    http::StatusCode,
+    http::{header, Method, StatusCode},
     response::Json,
     routing::{get, post},
     Router,
@@ -65,7 +65,30 @@ async fn main() {
         linear_workspace: Mutex::new(None),
     });
 
-    let app = Router::new()
+    let allowed_origins = env::var("ALLOWED_ORIGINS")
+        .unwrap_or_else(|_| "http://localhost:5173".to_string());
+
+    let app = create_app(state, &allowed_origins);
+    // PORT env var for Railway compatibility (defaults to 3001)
+    let port = env::var("PORT").unwrap_or_else(|_| "3001".to_string());
+    let bind_addr = format!("0.0.0.0:{port}");
+    let listener = tokio::net::TcpListener::bind(&bind_addr).await.unwrap();
+    tracing::info!("UCM API server listening on http://{bind_addr}");
+    axum::serve(listener, app).await.unwrap();
+}
+
+fn create_app(state: Arc<AppState>, allowed_origins: &str) -> Router {
+    let mut cors = CorsLayer::new()
+        .allow_methods([Method::GET, Method::POST])
+        .allow_headers([header::CONTENT_TYPE]);
+
+    for origin in allowed_origins.split(',') {
+        if let Ok(origin) = origin.trim().parse() {
+            cors = cors.allow_origin(origin);
+        }
+    }
+
+    Router::new()
         .route("/health", get(health))
         .route("/graph/stats", get(graph_stats))
         .route("/graph", get(graph_json))
@@ -79,15 +102,8 @@ async fn main() {
         .route("/linear/connect", post(connect_linear))
         .route("/linear/status", get(linear_status))
         .route("/ingest/linear", post(ingest_linear))
-        .layer(CorsLayer::permissive())
-        .with_state(state);
-
-    // PORT env var for Railway compatibility (defaults to 3001)
-    let port = env::var("PORT").unwrap_or_else(|_| "3001".to_string());
-    let bind_addr = format!("0.0.0.0:{port}");
-    let listener = tokio::net::TcpListener::bind(&bind_addr).await.unwrap();
-    tracing::info!("UCM API server listening on http://{bind_addr}");
-    axum::serve(listener, app).await.unwrap();
+        .layer(cors)
+        .with_state(state)
 }
 
 // ─── Demo Graph Seeder ─────────────────────────────────────────────
@@ -711,4 +727,70 @@ async fn ingest_linear(
         "issues_count": issues_count,
         "events_created": total_events
     })))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::{
+        body::Body,
+        http::{header, Method, Request, StatusCode},
+    };
+    use tower::ServiceExt;
+
+    fn create_test_app(allowed_origins: &str) -> Router {
+        let state = Arc::new(AppState {
+            graph: Mutex::new(UcmGraph::new()),
+            event_store: Mutex::new(EventStore::new()),
+            trace_store: Mutex::new(TraceStore::new()),
+            linear_api_key: Mutex::new(None),
+            linear_workspace: Mutex::new(None),
+        });
+
+        create_app(state, allowed_origins)
+    }
+
+    #[tokio::test]
+    async fn test_cors_allowed_origin() {
+        let app = create_test_app("http://localhost:5173");
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method(Method::OPTIONS)
+                    .uri("/health")
+                    .header(header::ORIGIN, "http://localhost:5173")
+                    .header(header::ACCESS_CONTROL_REQUEST_METHOD, "GET")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.headers().get(header::ACCESS_CONTROL_ALLOW_ORIGIN).unwrap(),
+            "http://localhost:5173"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_cors_disallowed_origin() {
+        let app = create_test_app("http://localhost:5173");
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method(Method::OPTIONS)
+                    .uri("/health")
+                    .header(header::ORIGIN, "http://malicious.com")
+                    .header(header::ACCESS_CONTROL_REQUEST_METHOD, "GET")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert!(response.headers().get(header::ACCESS_CONTROL_ALLOW_ORIGIN).is_none());
+    }
 }
