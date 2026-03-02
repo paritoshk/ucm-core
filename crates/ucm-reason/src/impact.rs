@@ -461,4 +461,48 @@ mod tests {
         // Round-trip
         let _: ImpactReport = serde_json::from_str(&json).unwrap();
     }
+
+    #[test]
+    fn test_find_not_impacted() {
+        let graph = build_test_graph();
+        // validateToken is changed
+        let changed = vec![EntityId::local("src/auth/service.ts", "validateToken")];
+        // authMiddleware is impacted (directly)
+        let impacted = vec![ImpactedEntity {
+            entity_id: EntityId::local("src/api/middleware.ts", "authMiddleware"),
+            name: "authMiddleware".to_string(),
+            confidence: 0.95,
+            depth: 1,
+            impact_type: ImpactType::Direct,
+            path: vec!["validateToken".to_string(), "authMiddleware".to_string()],
+            reason: "imports directly".to_string(),
+        }];
+
+        let not_impacted = find_not_impacted(&graph, &changed, &impacted);
+
+        // generateReport should be in not_impacted because it has no path to validateToken
+        let report_ni = not_impacted.iter().find(|ni| ni.name == "generateReport");
+        assert!(report_ni.is_some());
+        assert_eq!(
+            report_ni.unwrap().reason,
+            "No graph path exists to changed entities"
+        );
+        assert_eq!(report_ni.unwrap().confidence, 0.90);
+
+        // processPayment should be in not_impacted because it WAS NOT in the impacted list passed in,
+        // even though it HAS a path to validateToken in the graph.
+        let payment_ni = not_impacted.iter().find(|ni| ni.name == "processPayment");
+        assert!(payment_ni.is_some());
+        assert_eq!(
+            payment_ni.unwrap().reason,
+            "Path exists but confidence below threshold"
+        );
+        assert_eq!(payment_ni.unwrap().confidence, 0.60);
+
+        // validateToken itself should NOT be in not_impacted
+        assert!(!not_impacted.iter().any(|ni| ni.name == "validateToken"));
+
+        // authMiddleware itself should NOT be in not_impacted
+        assert!(!not_impacted.iter().any(|ni| ni.name == "authMiddleware"));
+    }
 }
