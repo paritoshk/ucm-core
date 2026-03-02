@@ -120,8 +120,6 @@ function layoutNodes(entities: ApiEntity[], apiEdges: ApiEdge[]): Node[] {
         return fromOk && toOk;
     });
 
-    console.log(`[UCM] Layout: ${entities.length} entities, ${validEdges.length}/${apiEdges.length} valid edges`);
-
     // Build adjacency to compute a rough "depth" per node (BFS from roots).
     // Roots = nodes with no incoming edges.
     const inDegree = new Map<string, number>(entities.map(e => [e.id, 0]));
@@ -231,13 +229,6 @@ export function ArchitectureFlow() {
         async function tryLoadLive() {
             try {
                 const [ents, eds] = await Promise.all([fetchEntities(), fetchEdges()]);
-                console.log(`[UCM] API response: ${ents.length} entities, ${eds.length} edges`);
-                if (ents.length > 0) {
-                    console.log('[UCM] Sample entity id:', ents[0].id);
-                }
-                if (eds.length > 0) {
-                    console.log('[UCM] Sample edge from/to:', eds[0].from, '->', eds[0].to);
-                }
                 // Only swap to live data if the API actually has entities AND edges
                 if (ents.length > 0 && eds.length > 0) {
                     const liveNodes = layoutNodes(ents, eds);
@@ -251,12 +242,9 @@ export function ArchitectureFlow() {
                         console.warn('[UCM] Unmatched edges after safeId:', unmatchedEdges.map(e => `${e.source} -> ${e.target}`));
                         console.warn('[UCM] Available node IDs:', Array.from(nodeIds));
                     }
-                    console.log(`[UCM] Rendering: ${liveNodes.length} nodes, ${liveEdges.length} edges (${unmatchedEdges.length} unmatched)`);
                     setNodes(liveNodes);
                     setEdges(liveEdges);
                     setSource('live');
-                } else {
-                    console.log('[UCM] Insufficient live data, keeping demo graph');
                 }
             } catch (err) {
                 console.warn('[UCM] API fetch failed, keeping demo graph:', err);
