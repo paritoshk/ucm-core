@@ -1,9 +1,9 @@
 //! Jira/ticket adapter — converts ticket JSON into Requirement entities.
 
 use serde::{Deserialize, Serialize};
-use ucm_core::edge::*;
-use ucm_core::entity::*;
-use ucm_core::event::*;
+use ucm_graph_core::edge::*;
+use ucm_graph_core::entity::*;
+use ucm_graph_core::event::*;
 
 /// A simplified Jira ticket structure.
 #[derive(Debug, Clone, Serialize, Deserialize)]

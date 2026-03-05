@@ -2,9 +2,16 @@
 name = "ucm-api"
 version.workspace = true
 edition.workspace = true
+description = "HTTP API server for UCM graph queries and event ingestion"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
 
 [dependencies]
-ucm-core = { workspace = true }
+ucm-graph-core = { workspace = true }
 ucm-events = { workspace = true }
 ucm-ingest = { workspace = true }
 ucm-reason = { workspace = true }

@@ -28,9 +28,9 @@ use std::sync::{Arc, Mutex};
 use tower_http::cors::CorsLayer;
 use uuid::Uuid;
 
-use ucm_core::edge::{RelationType, UcmEdge};
-use ucm_core::entity::*;
-use ucm_core::graph::UcmGraph;
+use ucm_graph_core::edge::{RelationType, UcmEdge};
+use ucm_graph_core::entity::*;
+use ucm_graph_core::graph::UcmGraph;
 use ucm_events::projection::GraphProjection;
 use ucm_events::store::EventStore;
 use ucm_ingest::{code_parser, diff_parser, jira_adapter, linear_adapter};
@@ -402,7 +402,7 @@ async fn ingest_code(
     State(state): State<Arc<AppState>>,
     Json(req): Json<IngestCodeRequest>,
 ) -> Json<serde_json::Value> {
-    use ucm_core::event::EventPayload;
+    use ucm_graph_core::event::EventPayload;
     let events = code_parser::parse_source_code(&req.file_path, &req.source, &req.language);
 
     let entities_discovered = events

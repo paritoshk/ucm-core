@@ -2,8 +2,8 @@
 //! with traffic-based confidence scoring.
 
 use serde::{Deserialize, Serialize};
-use ucm_core::entity::*;
-use ucm_core::event::*;
+use ucm_graph_core::entity::*;
+use ucm_graph_core::event::*;
 
 /// A simplified API access log entry.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -63,8 +63,8 @@ pub fn ingest_api_logs(logs: &[ApiLogEntry]) -> Vec<UcmEvent> {
         if error_rate > 0.05 {
             events.push(UcmEvent::new(EventPayload::ConflictFlagged {
                 entity_id: EntityId::local(&format!("api/{}", first.path), key),
-                conflict_type: ucm_core::event::ConflictType::RequirementDrift,
-                sources: vec![ucm_core::event::ConflictSource {
+                conflict_type: ucm_graph_core::event::ConflictType::RequirementDrift,
+                sources: vec![ucm_graph_core::event::ConflictSource {
                     source_type: "api-logs".into(),
                     claimed_value: format!("{:.1}% error rate", error_rate * 100.0),
                     confidence,

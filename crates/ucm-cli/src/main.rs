@@ -6,8 +6,8 @@
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
-use ucm_core::entity::EntityId;
-use ucm_core::graph::UcmGraph;
+use ucm_graph_core::entity::EntityId;
+use ucm_graph_core::graph::UcmGraph;
 use ucm_ingest::code_parser;
 use ucm_reason::ambiguity::enrich_with_ambiguities;
 use ucm_reason::impact::analyze_impact;
@@ -207,7 +207,7 @@ fn build_graph(dir: &PathBuf, language: &str) -> UcmGraph {
 }
 
 /// Scan for Cargo.toml files and build a mapping: crate_name → src/ directory path.
-/// e.g. "ucm_core" → "ucm-core/src"
+/// e.g. "ucm_graph_core" → "ucm-core/src"
 fn build_rust_crate_map(dir: &PathBuf) -> code_parser::RustCrateMap {
     let mut map = code_parser::RustCrateMap::new();
 

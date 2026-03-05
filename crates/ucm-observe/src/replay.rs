@@ -100,7 +100,7 @@ pub fn compare_traces(original: &DecisionTrace, replayed: &DecisionTrace) -> Rep
 mod tests {
     use super::*;
     use crate::trace::*;
-    use ucm_core::entity::EntityId;
+    use ucm_graph_core::entity::EntityId;
 
     #[test]
     fn test_deterministic_replay() {

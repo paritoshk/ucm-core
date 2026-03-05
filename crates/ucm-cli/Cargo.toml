@@ -2,13 +2,20 @@
 name = "ucm-cli"
 version.workspace = true
 edition.workspace = true
+description = "CLI tool for UCM impact analysis on codebases"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
 
 [[bin]]
 name = "ucm"
 path = "src/main.rs"
 
 [dependencies]
-ucm-core = { workspace = true }
+ucm-graph-core = { workspace = true }
 ucm-reason = { workspace = true }
 ucm-events = { workspace = true }
 ucm-ingest = { workspace = true }

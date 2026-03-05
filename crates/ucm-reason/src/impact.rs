@@ -14,9 +14,9 @@ use petgraph::visit::EdgeRef;
 use petgraph::Direction;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet, VecDeque};
-use ucm_core::edge::ConfidenceTier;
-use ucm_core::entity::EntityId;
-use ucm_core::graph::{ImpactType, ImpactedEntity, NotImpactedEntity, UcmGraph};
+use ucm_graph_core::edge::ConfidenceTier;
+use ucm_graph_core::entity::EntityId;
+use ucm_graph_core::graph::{ImpactType, ImpactedEntity, NotImpactedEntity, UcmGraph};
 
 /// Full impact report for a change set — the primary output of the reasoning engine.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -343,8 +343,8 @@ pub fn analyze_impact(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ucm_core::edge::*;
-    use ucm_core::entity::*;
+    use ucm_graph_core::edge::*;
+    use ucm_graph_core::entity::*;
 
     fn build_test_graph() -> UcmGraph {
         let mut graph = UcmGraph::new();

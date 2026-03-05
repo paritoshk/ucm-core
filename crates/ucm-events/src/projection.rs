@@ -6,10 +6,10 @@
 //!
 //! Reference: Telicent CORE platform event-to-graph projection
 
-use ucm_core::edge::UcmEdge;
-use ucm_core::entity::UcmEntity;
-use ucm_core::event::{EventPayload, UcmEvent};
-use ucm_core::graph::UcmGraph;
+use ucm_graph_core::edge::UcmEdge;
+use ucm_graph_core::entity::UcmEntity;
+use ucm_graph_core::event::{EventPayload, UcmEvent};
+use ucm_graph_core::graph::UcmGraph;
 
 /// Projects events from the event store into a materialized context graph.
 pub struct GraphProjection;
@@ -97,8 +97,8 @@ impl GraphProjection {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ucm_core::edge::RelationType;
-    use ucm_core::entity::*;
+    use ucm_graph_core::edge::RelationType;
+    use ucm_graph_core::entity::*;
 
     #[test]
     fn test_replay_builds_graph() {

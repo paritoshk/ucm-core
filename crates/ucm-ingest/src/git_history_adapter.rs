@@ -5,9 +5,9 @@
 //! files that frequently change together, indicating implicit coupling.
 
 use serde::{Deserialize, Serialize};
-use ucm_core::edge::RelationType;
-use ucm_core::entity::*;
-use ucm_core::event::*;
+use ucm_graph_core::edge::RelationType;
+use ucm_graph_core::entity::*;
+use ucm_graph_core::event::*;
 
 /// A co-change entry mined from git history.
 #[derive(Debug, Clone, Serialize, Deserialize)]

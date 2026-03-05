@@ -2,9 +2,16 @@
 name = "ucm-ingest"
 version.workspace = true
 edition.workspace = true
+description = "Data ingestion adapters for UCM (Git, Jira, Linear, code parsing)"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
 
 [dependencies]
-ucm-core = { workspace = true }
+ucm-graph-core = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true }

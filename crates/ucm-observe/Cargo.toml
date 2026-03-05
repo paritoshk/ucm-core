@@ -2,9 +2,16 @@
 name = "ucm-observe"
 version.workspace = true
 edition.workspace = true
+description = "Observability and tracing hooks for UCM event streams"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
 
 [dependencies]
-ucm-core = { workspace = true }
+ucm-graph-core = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true }

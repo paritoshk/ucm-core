@@ -12,7 +12,7 @@
 use crate::explanation::ExplanationChain;
 use crate::impact::ImpactReport;
 use serde::{Deserialize, Serialize};
-use ucm_core::edge::ConfidenceTier;
+use ucm_graph_core::edge::ConfidenceTier;
 
 /// Complete test intent output — what to test and why.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -260,9 +260,9 @@ pub fn generate_test_intent(report: &ImpactReport) -> TestIntent {
 mod tests {
     use super::*;
     use crate::impact::analyze_impact;
-    use ucm_core::edge::*;
-    use ucm_core::entity::*;
-    use ucm_core::graph::UcmGraph;
+    use ucm_graph_core::edge::*;
+    use ucm_graph_core::entity::*;
+    use ucm_graph_core::graph::UcmGraph;
 
     #[test]
     fn test_generate_test_intent() {

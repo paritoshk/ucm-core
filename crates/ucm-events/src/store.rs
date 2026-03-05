@@ -7,7 +7,7 @@ use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use uuid::Uuid;
 
-use ucm_core::event::{EventPayload, UcmEvent};
+use ucm_graph_core::event::{EventPayload, UcmEvent};
 
 /// Append-only in-memory event store.
 ///
@@ -144,8 +144,8 @@ impl Default for EventStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ucm_core::entity::*;
-    use ucm_core::event::*;
+    use ucm_graph_core::entity::*;
+    use ucm_graph_core::event::*;
 
     #[test]
     fn test_append_and_retrieve() {

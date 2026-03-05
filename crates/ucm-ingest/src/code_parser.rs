@@ -17,11 +17,11 @@
 
 use std::collections::HashMap;
 use std::path::Path;
-use ucm_core::edge::*;
-use ucm_core::entity::*;
-use ucm_core::event::*;
+use ucm_graph_core::edge::*;
+use ucm_graph_core::entity::*;
+use ucm_graph_core::event::*;
 
-/// Maps Rust crate names (underscored, e.g. `ucm_core`) to their `src/`
+/// Maps Rust crate names (underscored, e.g. `ucm_graph_core`) to their `src/`
 /// directory paths relative to the scan root (e.g. `ucm-core/src`).
 /// Built by the CLI scanner from workspace `Cargo.toml` files.
 pub type RustCrateMap = HashMap<String, String>;
@@ -455,7 +455,7 @@ fn extract_imports_rust(
             let current_dir = rust_current_module_dir(&crate_src_root, file_in_crate);
             (current_dir, r)
         } else {
-            // Could be a sibling crate import: use ucm_core::graph::UcmGraph
+            // Could be a sibling crate import: use ucm_graph_core::graph::UcmGraph
             // Extract the first segment and look it up in crate_map
             let first_segment = rest.split("::").next().unwrap_or("");
             if let Some(sibling_root) = crate_map.get(first_segment) {
@@ -847,18 +847,18 @@ use std::collections::HashMap;
     #[test]
     fn test_rust_cross_crate_imports() {
         let source = r#"
-use ucm_core::graph::UcmGraph;
-use ucm_core::entity::{EntityId, EntityKind};
+use ucm_graph_core::graph::UcmGraph;
+use ucm_graph_core::entity::{EntityId, EntityKind};
 use ucm_ingest::code_parser;
 use serde::Serialize;
 "#;
         let mut crate_map = RustCrateMap::new();
-        crate_map.insert("ucm_core".to_string(), "ucm-core/src".to_string());
+        crate_map.insert("ucm_graph_core".to_string(), "ucm-core/src".to_string());
         crate_map.insert("ucm_ingest".to_string(), "ucm-ingest/src".to_string());
 
         let imports = extract_imports_rust(source, "ucm-api/src/main.rs", &crate_map);
 
-        // Should find 3 imports (ucm_core::graph, ucm_core::entity, ucm_ingest::code_parser)
+        // Should find 3 imports (ucm_graph_core::graph, ucm_graph_core::entity, ucm_ingest::code_parser)
         // Should skip serde (not in crate_map)
         assert_eq!(
             imports.len(),
@@ -943,7 +943,7 @@ app.post('/api/v1/auth/login', handleLogin);
         let mid_src =
             "import { validateToken } from './auth';\nexport function authMiddleware() {}";
 
-        use ucm_core::graph::UcmGraph;
+        use ucm_graph_core::graph::UcmGraph;
         use ucm_events::projection::GraphProjection;
         let mut graph = UcmGraph::new();
         for ev in parse_source_code("src/auth.ts", auth_src, "typescript") {

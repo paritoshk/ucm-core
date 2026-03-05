@@ -4,8 +4,8 @@
 //! to compare two ASTs. This mock parser compares source strings and
 //! classifies changes semantically.
 
-use ucm_core::entity::*;
-use ucm_core::event::*;
+use ucm_graph_core::entity::*;
+use ucm_graph_core::event::*;
 
 /// Compare before/after source code and emit change events.
 ///

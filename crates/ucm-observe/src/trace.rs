@@ -2,7 +2,7 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use ucm_core::entity::EntityId;
+use ucm_graph_core::entity::EntityId;
 use uuid::Uuid;
 
 /// A recorded reasoning decision — the atomic unit of auditability.

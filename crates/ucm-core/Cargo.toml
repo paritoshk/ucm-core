@@ -1,7 +1,14 @@
 [package]
-name = "ucm-core"
+name = "ucm-graph-core"
 version.workspace = true
 edition.workspace = true
+description = "Core graph types and entity model for the UCM impact-analysis engine"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
 
 [dependencies]
 petgraph = { workspace = true }

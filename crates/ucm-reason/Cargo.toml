@@ -2,9 +2,16 @@
 name = "ucm-reason"
 version.workspace = true
 edition.workspace = true
+description = "Bayesian impact analysis and intent reasoning for UCM graphs"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
 
 [dependencies]
-ucm-core = { workspace = true }
+ucm-graph-core = { workspace = true }
 petgraph = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

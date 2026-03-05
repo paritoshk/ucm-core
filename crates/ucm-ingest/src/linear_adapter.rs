@@ -1,8 +1,8 @@
 //! Linear adapter — converts Linear issues into Requirement/Feature entities.
 
 use serde::{Deserialize, Serialize};
-use ucm_core::entity::*;
-use ucm_core::event::*;
+use ucm_graph_core::entity::*;
+use ucm_graph_core::event::*;
 
 /// A Linear issue structure matching the GraphQL API response shape.
 #[derive(Debug, Clone, Serialize, Deserialize)]
