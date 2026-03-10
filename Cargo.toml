@@ -11,7 +11,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 authors = ["UCM Contributors"]
 license = "MIT"
@@ -52,9 +52,9 @@ thiserror = "2"
 anyhow = "1"
 
 # Internal crates
-ucm-graph-core = { path = "crates/ucm-core", version = "0.1.1" }
-ucm-ingest = { path = "crates/ucm-ingest", version = "0.1.1" }
-ucm-events = { path = "crates/ucm-events", version = "0.1.1" }
-ucm-reason = { path = "crates/ucm-reason", version = "0.1.1" }
-ucm-observe = { path = "crates/ucm-observe", version = "0.1.1" }
-ucm-api = { path = "crates/ucm-api", version = "0.1.1" }
+ucm-graph-core = { path = "crates/ucm-core", version = "0.1.2" }
+ucm-ingest = { path = "crates/ucm-ingest", version = "0.1.2" }
+ucm-events = { path = "crates/ucm-events", version = "0.1.2" }
+ucm-reason = { path = "crates/ucm-reason", version = "0.1.2" }
+ucm-observe = { path = "crates/ucm-observe", version = "0.1.2" }
+ucm-api = { path = "crates/ucm-api", version = "0.1.2" }

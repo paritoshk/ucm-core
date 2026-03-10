@@ -1565,7 +1565,7 @@ checksum = "562d481066bde0658276a35467c4af00bdc6ee726305698a55b86e61d7ad82bb"
 
 [[package]]
 name = "ucm-api"
-version = "0.1.0"
+version = "0.1.2"
 dependencies = [
  "axum",
  "chrono",
@@ -1576,8 +1576,8 @@ dependencies = [
  "tower-http",
  "tracing",
  "tracing-subscriber",
- "ucm-core",
  "ucm-events",
+ "ucm-graph-core",
  "ucm-ingest",
  "ucm-observe",
  "ucm-reason",
@@ -1586,76 +1586,76 @@ dependencies = [
 
 [[package]]
 name = "ucm-cli"
-version = "0.1.0"
+version = "0.1.2"
 dependencies = [
  "chrono",
  "clap",
  "serde",
  "serde_json",
- "ucm-core",
  "ucm-events",
+ "ucm-graph-core",
  "ucm-ingest",
  "ucm-reason",
  "uuid",
 ]
 
 [[package]]
-name = "ucm-core"
-version = "0.1.0"
+name = "ucm-events"
+version = "0.1.2"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "ucm-graph-core",
+ "uuid",
+]
+
+[[package]]
+name = "ucm-graph-core"
+version = "0.1.2"
 dependencies = [
  "chrono",
  "petgraph",
  "serde",
  "serde_json",
  "thiserror",
- "uuid",
-]
-
-[[package]]
-name = "ucm-events"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "serde",
- "serde_json",
- "thiserror",
- "ucm-core",
  "uuid",
 ]
 
 [[package]]
 name = "ucm-ingest"
-version = "0.1.0"
+version = "0.1.2"
 dependencies = [
  "chrono",
  "serde",
  "serde_json",
  "thiserror",
- "ucm-core",
  "ucm-events",
+ "ucm-graph-core",
  "uuid",
 ]
 
 [[package]]
 name = "ucm-observe"
-version = "0.1.0"
+version = "0.1.2"
 dependencies = [
  "chrono",
  "serde",
  "serde_json",
- "ucm-core",
+ "ucm-graph-core",
  "uuid",
 ]
 
 [[package]]
 name = "ucm-reason"
-version = "0.1.0"
+version = "0.1.2"
 dependencies = [
  "chrono",
  "petgraph",
  "serde",
  "serde_json",
- "ucm-core",
+ "ucm-graph-core",
  "uuid",
 ]
 
