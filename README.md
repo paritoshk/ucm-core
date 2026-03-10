@@ -10,6 +10,24 @@ UCM builds a Bayesian dependency graph of your codebase and answers:
 
 ---
 
+## ⚡ TL;DR: What is UCM?
+
+**UCM is not a log collector. It is a Code Impact Analysis Engine.**
+
+UCM acts like a highly intelligent, real-time map of your codebase:
+1. **It ingests code and tickets**: It parses your source code (functions, imports, API endpoints) and your Jira/Linear tickets to find entities and relationships. 
+2. **It builds a Graph**: It connects all of this together in memory. It knows that "Ticket JIRA-42" requires changes to the `validateToken` function, and that the `processPayment` endpoint imports `validateToken`.
+3. **It answers "What if?":** If you ask, *"I am about to change `validateToken`, what else is going to break?"*, UCM runs a Bayesian probability algorithm to highlight every connected piece of code and calculate a "confidence score" that it will be impacted.
+
+### What is the `ucm-api` server for?
+The API server exists so that other tools can talk to that graph cleanly:
+- Your **React Dashboard** uses the API to visualize the graph and show the impact reports to managers.
+- A **GitHub Action (CI/CD)** could ping the API with a git diff to auto-comment on PRs with impact warnings.
+
+Its core job is to sit in the background, hold the codebase graph in memory, listen for new code changes, and answer impact queries.
+
+---
+
 ## Install
 
 ```bash
