@@ -171,7 +171,7 @@ Set `VITE_API_URL` to point at a remote `ucm-api` instance.
 ucm-core      — graph types, Bayesian math, SCIP identity  [open-source]
 ucm-ingest    — source adapters: code, git, Jira, Linear   [this repo]
 ucm-events    — event store + graph projection             [this repo]
-ucm-reason    — BFS impact engine, test intent             [proprietary]
+ucm-reason    — BFS impact engine, test intent             [this repo]
 ucm-observe   — event replay, audit trail                  [this repo]
 ucm-api       — Axum REST server                           [this repo]
 ucm-cli       — terminal interface                         [this repo]
