@@ -1,0 +1,8 @@
+Scanning /Users/paritoshkulkarni/marimo/marimo for python files...
+
+  Entities discovered: 8117
+  Edges detected:     14582
+  Files tracked:       1108
+  Avg confidence:      98.5%
+
+  Graph built successfully. Use `ucm impact` to analyze changes.

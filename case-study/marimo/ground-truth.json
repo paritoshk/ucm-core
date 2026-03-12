@@ -1,0 +1,55 @@
+{
+  "scenario_A": {
+    "description": "Change Executor.execute_cell in _runtime/executor.py",
+    "expected_impacts": [
+      "Executor",
+      "DefaultExecutor",
+      "StrictExecutor",
+      "module"
+    ],
+    "notes": "Methods within Executor are directly contained. DefaultExecutor and StrictExecutor extend Executor. Limited blast radius due to class containment."
+  },
+  "scenario_A_module": {
+    "description": "Change _runtime/runtime.py module (broad runtime change)",
+    "expected_impacts": [
+      "Kernel",
+      "Kernel.run",
+      "Kernel.code_completion",
+      "Kernel.handle_set_ui_element_value",
+      "Kernel.run_scratchpad",
+      "module"
+    ],
+    "notes": "Runtime module has 119 in-degree, widest blast radius in codebase. Changes here cascade to virtually all runtime consumers."
+  },
+  "scenario_B": {
+    "description": "Change ScopedVisitor in _ast/visitor.py",
+    "expected_impacts": [
+      "ScopedVisitor",
+      "ScopedVisitor.visit_FunctionDef",
+      "ScopedVisitor.visit_Name",
+      "module"
+    ],
+    "notes": "ScopedVisitor has 42 out-degree (most dependencies of any AST class). Changes here cascade through cell compilation and dependency detection — 93 indirect impacts observed."
+  },
+  "scenario_C": {
+    "description": "Change DirectedGraph in _runtime/dataflow/graph.py",
+    "expected_impacts": [
+      "DirectedGraph",
+      "module"
+    ],
+    "notes": "DirectedGraph is the core data structure for dependency tracking. Changes ripple through the execution scheduler. 24 indirect impacts observed."
+  },
+  "scenario_D": {
+    "description": "Change slider in _plugins/ui/_impl/input.py",
+    "expected_impacts": [],
+    "notes": "UI plugins are leaf nodes with no reverse dependencies at the class level. 0 impacts is the expected/correct result — this validates that UCM correctly identifies isolated components."
+  },
+  "scenario_E": {
+    "description": "Change flatten in _utils/flatten.py",
+    "expected_impacts": [
+      "module",
+      "flatten"
+    ],
+    "notes": "Cross-cutting utility with moderate blast radius. 10 indirect impacts — wider than UI plugins but narrower than runtime core."
+  }
+}
