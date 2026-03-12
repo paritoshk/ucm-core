@@ -1,0 +1,4 @@
+# Large reproducible results — regenerate with: ./run.sh
+graph.json
+impact-*.json
+intent-*.json

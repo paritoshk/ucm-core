@@ -26,6 +26,11 @@ use ucm_graph_core::event::*;
 /// Built by the CLI scanner from workspace `Cargo.toml` files.
 pub type RustCrateMap = HashMap<String, String>;
 
+/// The top-level Python package name for absolute import resolution.
+/// e.g. for marimo, this is "marimo" — so `from marimo._runtime.dataflow import X`
+/// resolves to `marimo/_runtime/dataflow.py`.
+pub type PythonPackageRoot = Option<String>;
+
 /// Parse source code and emit entity + dependency events.
 ///
 /// # Arguments
@@ -49,6 +54,17 @@ pub fn parse_source_code_with_context(
     language: &str,
     crate_map: &RustCrateMap,
 ) -> Vec<UcmEvent> {
+    parse_source_code_full(file_path, source, language, crate_map, &None)
+}
+
+/// Parse source code with full context including Python package root.
+pub fn parse_source_code_full(
+    file_path: &str,
+    source: &str,
+    language: &str,
+    crate_map: &RustCrateMap,
+    python_package_root: &PythonPackageRoot,
+) -> Vec<UcmEvent> {
     let mut events = Vec::new();
 
     // 1. Emit a module entity for this file so import edges have a valid source.
@@ -67,64 +83,144 @@ pub fn parse_source_code_with_context(
     }));
 
     // 2. Extract function/struct entities and wire them to the module.
-    let functions = match language {
-        "rust" | "rs" => extract_functions_rust(source),
-        "python" | "py" => extract_functions_python(source),
-        _ => extract_functions_ts(source),
-    };
+    //    For Python, also extract class-method associations.
+    if matches!(language, "python" | "py") {
+        let py_entities = extract_python_entities(source);
+        for ent in &py_entities {
+            match ent {
+                PythonEntity::Function { name, is_async, line_start, line_end, class_name } => {
+                    let display_name = if let Some(cls) = class_name {
+                        format!("{cls}.{name}")
+                    } else {
+                        name.clone()
+                    };
+                    let fn_id = EntityId::local(file_path, &display_name);
+                    events.push(UcmEvent::new(EventPayload::EntityDiscovered {
+                        entity_id: fn_id.clone(),
+                        kind: EntityKind::Function {
+                            is_async: *is_async,
+                            parameter_count: 0,
+                            return_type: None,
+                        },
+                        name: display_name.clone(),
+                        file_path: file_path.to_string(),
+                        language: language.to_string(),
+                        source: DiscoverySource::StaticAnalysis,
+                        line_range: Some((*line_start, *line_end)),
+                    }));
+                    events.push(UcmEvent::new(EventPayload::DependencyLinked {
+                        source_entity: fn_id.clone(),
+                        target_entity: module_id.clone(),
+                        relation_type: RelationType::DependsOn,
+                        confidence: 0.99,
+                        source: DiscoverySource::StaticAnalysis,
+                        description: format!("{display_name} is defined in {file_path}"),
+                    }));
+                    // If method belongs to a class, emit Contains edge
+                    if let Some(cls) = class_name {
+                        let class_id = EntityId::local(file_path, cls);
+                        events.push(UcmEvent::new(EventPayload::DependencyLinked {
+                            source_entity: class_id,
+                            target_entity: fn_id,
+                            relation_type: RelationType::Contains,
+                            confidence: 0.99,
+                            source: DiscoverySource::StaticAnalysis,
+                            description: format!("{cls} contains method {name}"),
+                        }));
+                    }
+                }
+                PythonEntity::Class { name, line_num, bases } => {
+                    let class_id = EntityId::local(file_path, name);
+                    events.push(UcmEvent::new(EventPayload::EntityDiscovered {
+                        entity_id: class_id.clone(),
+                        kind: EntityKind::DataModel { fields: vec![] },
+                        name: name.clone(),
+                        file_path: file_path.to_string(),
+                        language: language.to_string(),
+                        source: DiscoverySource::StaticAnalysis,
+                        line_range: Some((*line_num, line_num + 5)),
+                    }));
+                    events.push(UcmEvent::new(EventPayload::DependencyLinked {
+                        source_entity: class_id.clone(),
+                        target_entity: module_id.clone(),
+                        relation_type: RelationType::DependsOn,
+                        confidence: 0.99,
+                        source: DiscoverySource::StaticAnalysis,
+                        description: format!("{name} is defined in {file_path}"),
+                    }));
+                    // Emit Extends edges for each base class
+                    for base in bases {
+                        let base_id = EntityId::local(file_path, base);
+                        events.push(UcmEvent::new(EventPayload::DependencyLinked {
+                            source_entity: class_id.clone(),
+                            target_entity: base_id,
+                            relation_type: RelationType::Extends,
+                            confidence: 0.90,
+                            source: DiscoverySource::StaticAnalysis,
+                            description: format!("{name} extends {base}"),
+                        }));
+                    }
+                }
+            }
+        }
+    } else {
+        let functions = match language {
+            "rust" | "rs" => extract_functions_rust(source),
+            _ => extract_functions_ts(source),
+        };
 
-    for (name, is_async, line_start, line_end) in functions {
-        let fn_id = EntityId::local(file_path, &name);
-        events.push(UcmEvent::new(EventPayload::EntityDiscovered {
-            entity_id: fn_id.clone(),
-            kind: EntityKind::Function {
-                is_async,
-                parameter_count: 0,
-                return_type: None,
-            },
-            name: name.clone(),
-            file_path: file_path.to_string(),
-            language: language.to_string(),
-            source: DiscoverySource::StaticAnalysis,
-            line_range: Some((line_start, line_end)),
-        }));
-        // fn → module: "this function lives in this module"
-        events.push(UcmEvent::new(EventPayload::DependencyLinked {
-            source_entity: fn_id,
-            target_entity: module_id.clone(),
-            relation_type: RelationType::DependsOn,
-            confidence: 0.99,
-            source: DiscoverySource::StaticAnalysis,
-            description: format!("{name} is defined in {file_path}"),
-        }));
-    }
+        for (name, is_async, line_start, line_end) in functions {
+            let fn_id = EntityId::local(file_path, &name);
+            events.push(UcmEvent::new(EventPayload::EntityDiscovered {
+                entity_id: fn_id.clone(),
+                kind: EntityKind::Function {
+                    is_async,
+                    parameter_count: 0,
+                    return_type: None,
+                },
+                name: name.clone(),
+                file_path: file_path.to_string(),
+                language: language.to_string(),
+                source: DiscoverySource::StaticAnalysis,
+                line_range: Some((line_start, line_end)),
+            }));
+            // fn → module: "this function lives in this module"
+            events.push(UcmEvent::new(EventPayload::DependencyLinked {
+                source_entity: fn_id,
+                target_entity: module_id.clone(),
+                relation_type: RelationType::DependsOn,
+                confidence: 0.99,
+                source: DiscoverySource::StaticAnalysis,
+                description: format!("{name} is defined in {file_path}"),
+            }));
+        }
 
-    // 3. Extract class / struct entities.
-    let structs = match language {
-        "rust" | "rs" => extract_structs_rust(source),
-        "python" | "py" => extract_classes_python(source),
-        _ => extract_classes_ts(source),
-    };
+        // 3. Extract class / struct entities.
+        let structs = match language {
+            "rust" | "rs" => extract_structs_rust(source),
+            _ => extract_classes_ts(source),
+        };
 
-    for (name, line_num) in structs {
-        let struct_id = EntityId::local(file_path, &name);
-        events.push(UcmEvent::new(EventPayload::EntityDiscovered {
-            entity_id: struct_id.clone(),
-            kind: EntityKind::DataModel { fields: vec![] },
-            name: name.clone(),
-            file_path: file_path.to_string(),
-            language: language.to_string(),
-            source: DiscoverySource::StaticAnalysis,
-            line_range: Some((line_num, line_num + 5)),
-        }));
-        events.push(UcmEvent::new(EventPayload::DependencyLinked {
-            source_entity: struct_id,
-            target_entity: module_id.clone(),
-            relation_type: RelationType::DependsOn,
-            confidence: 0.99,
-            source: DiscoverySource::StaticAnalysis,
-            description: format!("{name} is defined in {file_path}"),
-        }));
+        for (name, line_num) in structs {
+            let struct_id = EntityId::local(file_path, &name);
+            events.push(UcmEvent::new(EventPayload::EntityDiscovered {
+                entity_id: struct_id.clone(),
+                kind: EntityKind::DataModel { fields: vec![] },
+                name: name.clone(),
+                file_path: file_path.to_string(),
+                language: language.to_string(),
+                source: DiscoverySource::StaticAnalysis,
+                line_range: Some((line_num, line_num + 5)),
+            }));
+            events.push(UcmEvent::new(EventPayload::DependencyLinked {
+                source_entity: struct_id,
+                target_entity: module_id.clone(),
+                relation_type: RelationType::DependsOn,
+                confidence: 0.99,
+                source: DiscoverySource::StaticAnalysis,
+                description: format!("{name} is defined in {file_path}"),
+            }));
+        }
     }
 
     // 4. Extract API routes (TypeScript/JS only).
@@ -161,7 +257,7 @@ pub fn parse_source_code_with_context(
     //    then to all functions/structs that DependsOn this module.
     let imports = match language {
         "rust" | "rs" => extract_imports_rust(source, file_path, crate_map),
-        "python" | "py" => extract_imports_python(source, file_path),
+        "python" | "py" => extract_imports_python(source, file_path, python_package_root),
         _ => extract_imports_ts(source, file_path),
     };
 
@@ -583,67 +679,225 @@ fn rust_current_module_dir(crate_src_root: &str, file_in_crate: &str) -> String 
 
 // ── Python ───────────────────────────────────────────────────────────────────
 
-fn extract_functions_python(source: &str) -> Vec<(String, bool, usize, usize)> {
+/// A Python entity extracted with indentation awareness.
+#[derive(Debug)]
+enum PythonEntity {
+    Function {
+        name: String,
+        is_async: bool,
+        line_start: usize,
+        line_end: usize,
+        /// If this function is a method, the enclosing class name.
+        class_name: Option<String>,
+    },
+    Class {
+        name: String,
+        line_num: usize,
+        /// Base class names from `class Foo(Bar, Baz):`.
+        bases: Vec<String>,
+    },
+}
+
+/// Extract Python functions and classes with indentation-based class-method association.
+fn extract_python_entities(source: &str) -> Vec<PythonEntity> {
     let mut out = Vec::new();
+    let mut current_class: Option<(String, usize)> = None; // (name, indent_col)
+
     for (i, line) in source.lines().enumerate() {
-        let t = line.trim();
-        if let Some(rest) = t
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+
+        let indent = line.len() - line.trim_start().len();
+
+        // If we're inside a class and hit a line at or before the class indent
+        // (that isn't blank), we've left the class body.
+        if let Some((_, class_indent)) = &current_class {
+            if indent <= *class_indent && !trimmed.is_empty() {
+                current_class = None;
+            }
+        }
+
+        // Detect class definition
+        if let Some(rest) = trimmed.strip_prefix("class ") {
+            let name: String = rest
+                .chars()
+                .take_while(|c| c.is_alphanumeric() || *c == '_')
+                .collect();
+            if !name.is_empty() {
+                let bases = parse_python_bases(rest);
+                current_class = Some((name.clone(), indent));
+                out.push(PythonEntity::Class {
+                    name,
+                    line_num: i + 1,
+                    bases,
+                });
+                continue;
+            }
+        }
+
+        // Detect function/method definition
+        if let Some(rest) = trimmed
             .strip_prefix("async def ")
-            .or_else(|| t.strip_prefix("def "))
+            .or_else(|| trimmed.strip_prefix("def "))
         {
-            let is_async = t.starts_with("async ");
+            let is_async = trimmed.starts_with("async ");
             let name: String = rest
                 .chars()
                 .take_while(|c| c.is_alphanumeric() || *c == '_')
                 .collect();
             if !name.is_empty() {
-                out.push((name, is_async, i + 1, i + 20));
+                let class_name = current_class
+                    .as_ref()
+                    .filter(|(_, ci)| indent > *ci)
+                    .map(|(cn, _)| cn.clone());
+                out.push(PythonEntity::Function {
+                    name,
+                    is_async,
+                    line_start: i + 1,
+                    line_end: i + 20,
+                    class_name,
+                });
             }
         }
     }
     out
 }
 
-fn extract_classes_python(source: &str) -> Vec<(String, usize)> {
-    let mut out = Vec::new();
-    for (i, line) in source.lines().enumerate() {
-        let t = line.trim();
-        if let Some(rest) = t.strip_prefix("class ") {
-            let name: String = rest
-                .chars()
-                .take_while(|c| c.is_alphanumeric() || *c == '_')
+/// Parse base classes from a class definition line.
+/// `"Foo(Bar, Baz):"` → `["Bar", "Baz"]`
+fn parse_python_bases(after_class_name: &str) -> Vec<String> {
+    if let Some(paren_start) = after_class_name.find('(') {
+        if let Some(paren_end) = after_class_name.find(')') {
+            let inner = &after_class_name[paren_start + 1..paren_end];
+            return inner
+                .split(',')
+                .map(|s| {
+                    // Handle `metaclass=ABCMeta` style args — skip keyword args
+                    let s = s.trim();
+                    if s.contains('=') {
+                        return String::new();
+                    }
+                    // Take just the last component of dotted names: `abc.ABC` → `ABC`
+                    s.rsplit('.').next().unwrap_or("").trim().to_string()
+                })
+                .filter(|s| !s.is_empty())
                 .collect();
-            if !name.is_empty() {
-                out.push((name, i + 1));
-            }
         }
     }
-    out
+    vec![]
 }
 
-fn extract_imports_python(source: &str, current_file: &str) -> Vec<(Vec<String>, String, usize)> {
+/// Extract Python imports: relative (`from .mod import X`) and absolute (`from pkg.mod import X`).
+fn extract_imports_python(
+    source: &str,
+    current_file: &str,
+    package_root: &PythonPackageRoot,
+) -> Vec<(Vec<String>, String, usize)> {
     let mut out = Vec::new();
     let dir = parent_dir(current_file);
+
     for (i, line) in source.lines().enumerate() {
         let t = line.trim();
+
+        // Handle `from .module import Foo, Bar` (relative imports)
         if let Some(rest) = t.strip_prefix("from .") {
-            // from .module import Foo, Bar
             if let Some(imp_pos) = rest.find(" import ") {
                 let mod_part = &rest[..imp_pos];
                 let imp_part = &rest[imp_pos + 8..];
-                let symbols: Vec<String> = imp_part
-                    .split(',')
-                    .map(|s| s.trim().to_string())
-                    .filter(|s| !s.is_empty() && s != "*")
-                    .collect();
-                let path = format!("{dir}/{}.py", mod_part.trim_start_matches('.'));
+                let symbols = parse_python_import_symbols(imp_part);
+                // Resolve dots: `from ..foo import X` means go up two levels
+                let dots = mod_part.chars().take_while(|c| *c == '.').count();
+                let module_name = mod_part.trim_start_matches('.');
+                let mut base = dir.clone();
+                for _ in 0..dots {
+                    base = parent_dir(&base);
+                }
+                let path = if module_name.is_empty() {
+                    format!("{base}/__init__.py")
+                } else {
+                    format!("{base}/{}.py", module_name.replace('.', "/"))
+                };
                 if !symbols.is_empty() {
                     out.push((symbols, path, i + 1));
+                }
+            }
+            continue;
+        }
+
+        // Handle `from package.sub.module import X, Y` (absolute imports)
+        if let Some(rest) = t.strip_prefix("from ") {
+            if let Some(imp_pos) = rest.find(" import ") {
+                let mod_part = &rest[..imp_pos];
+                let imp_part = &rest[imp_pos + 8..];
+
+                // Only resolve if it matches the project's package root
+                if let Some(pkg) = package_root {
+                    if mod_part.starts_with(pkg.as_str()) {
+                        let symbols = parse_python_import_symbols(imp_part);
+                        // Strip package root prefix and convert dots to slashes:
+                        // `marimo._runtime.dataflow` → `_runtime/dataflow.py`
+                        // The package root maps to the scan directory itself.
+                        let after_pkg = mod_part
+                            .strip_prefix(pkg.as_str())
+                            .unwrap_or(mod_part)
+                            .trim_start_matches('.');
+                        let path = if after_pkg.is_empty() {
+                            "__init__.py".to_string()
+                        } else {
+                            format!("{}.py", after_pkg.replace('.', "/"))
+                        };
+                        if !symbols.is_empty() {
+                            out.push((symbols, path, i + 1));
+                        }
+                    }
+                }
+            }
+            continue;
+        }
+
+        // Handle `import package.sub.module` (bare absolute imports)
+        if let Some(rest) = t.strip_prefix("import ") {
+            if let Some(pkg) = package_root {
+                // May have comma-separated: `import foo.bar, foo.baz`
+                for mod_path in rest.split(',') {
+                    let mod_path = mod_path.trim().split(" as ").next().unwrap_or("").trim();
+                    if mod_path.starts_with(pkg.as_str()) {
+                        let after_pkg = mod_path
+                            .strip_prefix(pkg.as_str())
+                            .unwrap_or(mod_path)
+                            .trim_start_matches('.');
+                        let path = if after_pkg.is_empty() {
+                            "__init__.py".to_string()
+                        } else {
+                            format!("{}.py", after_pkg.replace('.', "/"))
+                        };
+                        out.push((vec!["module".to_string()], path, i + 1));
+                    }
                 }
             }
         }
     }
     out
+}
+
+/// Parse symbols from the `import X, Y as Z, W` part of a Python import.
+fn parse_python_import_symbols(imp_part: &str) -> Vec<String> {
+    // Handle parenthesized imports: `from x import (\n  A,\n  B\n)`
+    let cleaned = imp_part.trim_start_matches('(').trim_end_matches(')');
+    cleaned
+        .split(',')
+        .map(|s| {
+            s.trim()
+                .split(" as ")
+                .next()
+                .unwrap_or("")
+                .trim()
+                .to_string()
+        })
+        .filter(|s| !s.is_empty() && s != "*")
+        .collect()
 }
 
 // ── Path utilities ────────────────────────────────────────────────────────────
@@ -959,5 +1213,273 @@ app.post('/api/v1/auth/login', handleLogin);
             stats.edge_count >= 1,
             "Should have at least one edge — this was the core bug"
         );
+    }
+
+    // ── Python parser tests ──────────────────────────────────────────────────
+
+    #[test]
+    fn test_python_absolute_imports() {
+        let source = r#"
+from marimo._runtime.dataflow import DirectedGraph
+from marimo._ast.visitor import parse_cell
+import os
+import marimo._plugins.ui as ui
+"#;
+        let pkg_root = Some("marimo".to_string());
+        let imports = extract_imports_python(source, "_runtime/runtime.py", &pkg_root);
+
+        // Should find 3 imports: 2 `from` + 1 bare `import` matching package root
+        assert_eq!(imports.len(), 3, "Expected 3 marimo imports, got {imports:?}");
+
+        // Check first import resolves correctly (package root stripped)
+        let dg_import = imports
+            .iter()
+            .find(|(s, _, _)| s.contains(&"DirectedGraph".to_string()))
+            .expect("Should find DirectedGraph import");
+        assert_eq!(dg_import.1, "_runtime/dataflow.py");
+
+        // Check second import
+        let visitor_import = imports
+            .iter()
+            .find(|(s, _, _)| s.contains(&"parse_cell".to_string()))
+            .expect("Should find parse_cell import");
+        assert_eq!(visitor_import.1, "_ast/visitor.py");
+
+        // Check bare import
+        let bare_import = imports
+            .iter()
+            .find(|(_, path, _)| path.contains("_plugins"))
+            .expect("Should find bare marimo._plugins import");
+        assert_eq!(bare_import.1, "_plugins/ui.py");
+    }
+
+    #[test]
+    fn test_python_absolute_imports_skip_external() {
+        let source = r#"
+from marimo._runtime.dataflow import DirectedGraph
+from typing import Optional
+import json
+from dataclasses import dataclass
+"#;
+        let pkg_root = Some("marimo".to_string());
+        let imports = extract_imports_python(source, "marimo/test.py", &pkg_root);
+
+        // Should only find 1 import (marimo), skip typing/json/dataclasses
+        assert_eq!(
+            imports.len(),
+            1,
+            "Should skip external imports, got {imports:?}"
+        );
+    }
+
+    #[test]
+    fn test_python_relative_imports_still_work() {
+        let source = r#"
+from .dataflow import DirectedGraph
+from ..utils import serialize
+"#;
+        let pkg_root = Some("marimo".to_string());
+        let imports = extract_imports_python(source, "marimo/_runtime/runtime.py", &pkg_root);
+
+        assert_eq!(imports.len(), 2, "Should find 2 relative imports");
+        let dg = imports
+            .iter()
+            .find(|(s, _, _)| s.contains(&"DirectedGraph".to_string()))
+            .unwrap();
+        assert_eq!(dg.1, "marimo/_runtime/dataflow.py");
+
+        let util = imports
+            .iter()
+            .find(|(s, _, _)| s.contains(&"serialize".to_string()))
+            .unwrap();
+        assert_eq!(util.1, "marimo/utils.py");
+    }
+
+    #[test]
+    fn test_python_class_method_association() {
+        let source = r#"
+class DirectedGraph:
+    def __init__(self):
+        pass
+
+    def add_edge(self, src, dst):
+        pass
+
+    async def traverse(self):
+        pass
+
+def standalone_function():
+    pass
+"#;
+        let entities = extract_python_entities(source);
+
+        // Should find: 1 class + 3 methods + 1 standalone function
+        let classes: Vec<_> = entities
+            .iter()
+            .filter(|e| matches!(e, PythonEntity::Class { .. }))
+            .collect();
+        assert_eq!(classes.len(), 1, "Should find 1 class");
+
+        let methods: Vec<_> = entities
+            .iter()
+            .filter(|e| matches!(e, PythonEntity::Function { class_name: Some(_), .. }))
+            .collect();
+        assert_eq!(methods.len(), 3, "Should find 3 methods in DirectedGraph");
+
+        let standalone: Vec<_> = entities
+            .iter()
+            .filter(|e| matches!(e, PythonEntity::Function { class_name: None, .. }))
+            .collect();
+        assert_eq!(standalone.len(), 1, "Should find 1 standalone function");
+
+        // Verify method names are associated with the class
+        for m in &methods {
+            if let PythonEntity::Function { class_name, .. } = m {
+                assert_eq!(
+                    class_name.as_deref(),
+                    Some("DirectedGraph"),
+                    "Method should belong to DirectedGraph"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_python_class_method_events() {
+        let source = r#"
+class MyClass:
+    def my_method(self):
+        pass
+"#;
+        let events = parse_source_code("test.py", source, "python");
+
+        // Should have Contains edge from MyClass to MyClass.my_method
+        let contains_edges: Vec<_> = events
+            .iter()
+            .filter(|e| {
+                matches!(
+                    &e.payload,
+                    EventPayload::DependencyLinked {
+                        relation_type: RelationType::Contains,
+                        ..
+                    }
+                )
+            })
+            .collect();
+        assert_eq!(
+            contains_edges.len(),
+            1,
+            "Should have 1 Contains edge for class→method"
+        );
+
+        // Verify the method is named ClassName.method_name
+        let method_entities: Vec<_> = events
+            .iter()
+            .filter_map(|e| {
+                if let EventPayload::EntityDiscovered {
+                    kind: EntityKind::Function { .. },
+                    name,
+                    ..
+                } = &e.payload
+                {
+                    Some(name.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
+        assert!(
+            method_entities.contains(&"MyClass.my_method".to_string()),
+            "Method should be named MyClass.my_method, got {method_entities:?}"
+        );
+    }
+
+    #[test]
+    fn test_python_inheritance_edges() {
+        let source = r#"
+class Animal:
+    pass
+
+class Dog(Animal):
+    pass
+
+class GuideDog(Dog, Trainable):
+    pass
+"#;
+        let entities = extract_python_entities(source);
+
+        let classes: Vec<_> = entities
+            .iter()
+            .filter_map(|e| {
+                if let PythonEntity::Class { name, bases, .. } = e {
+                    Some((name.clone(), bases.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        assert_eq!(classes.len(), 3);
+
+        let animal = classes.iter().find(|(n, _)| n == "Animal").unwrap();
+        assert!(animal.1.is_empty(), "Animal has no bases");
+
+        let dog = classes.iter().find(|(n, _)| n == "Dog").unwrap();
+        assert_eq!(dog.1, vec!["Animal"]);
+
+        let guide = classes.iter().find(|(n, _)| n == "GuideDog").unwrap();
+        assert_eq!(guide.1, vec!["Dog", "Trainable"]);
+    }
+
+    #[test]
+    fn test_python_inheritance_events() {
+        let source = r#"
+class Base:
+    pass
+
+class Child(Base):
+    pass
+"#;
+        let events = parse_source_code("test.py", source, "python");
+
+        let extends_edges: Vec<_> = events
+            .iter()
+            .filter(|e| {
+                matches!(
+                    &e.payload,
+                    EventPayload::DependencyLinked {
+                        relation_type: RelationType::Extends,
+                        ..
+                    }
+                )
+            })
+            .collect();
+        assert_eq!(
+            extends_edges.len(),
+            1,
+            "Should have 1 Extends edge (Child → Base)"
+        );
+    }
+
+    #[test]
+    fn test_python_no_package_root_skips_absolute() {
+        let source = "from marimo._runtime import foo\nimport json\n";
+        let no_pkg: PythonPackageRoot = None;
+        let imports = extract_imports_python(source, "test.py", &no_pkg);
+        assert!(
+            imports.is_empty(),
+            "Without package root, absolute imports should be skipped"
+        );
+    }
+
+    #[test]
+    fn test_python_metaclass_skipped_in_bases() {
+        let source = "class Foo(Bar, metaclass=ABCMeta):\n    pass\n";
+        let entities = extract_python_entities(source);
+        if let Some(PythonEntity::Class { bases, .. }) = entities.first() {
+            assert_eq!(bases, &["Bar"], "metaclass= arg should be skipped");
+        } else {
+            panic!("Expected a class entity");
+        }
     }
 }

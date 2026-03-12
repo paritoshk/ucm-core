@@ -17,6 +17,9 @@ use ucm_reason::intent::generate_test_intent;
 /// Full analysis requires UCM Pro for repos exceeding this limit.
 const COMMUNITY_ENTITY_LIMIT: usize = 500;
 
+/// Research mode entity limit (effectively unlimited for case studies).
+const RESEARCH_ENTITY_LIMIT: usize = 50_000;
+
 #[derive(Parser)]
 #[command(
     name = "ucm",
@@ -39,6 +42,14 @@ enum Commands {
         /// Programming language to parse
         #[arg(short, long, default_value = "typescript")]
         language: String,
+
+        /// Disable entity limit (research mode)
+        #[arg(long)]
+        no_limit: bool,
+
+        /// Python package root name for absolute import resolution (e.g. "marimo")
+        #[arg(long)]
+        package_root: Option<String>,
     },
 
     /// Show graph statistics
@@ -54,6 +65,14 @@ enum Commands {
         /// Programming language
         #[arg(short, long, default_value = "typescript")]
         language: String,
+
+        /// Disable entity limit (research mode)
+        #[arg(long)]
+        no_limit: bool,
+
+        /// Python package root name for absolute import resolution
+        #[arg(long)]
+        package_root: Option<String>,
     },
 
     /// Analyze the impact of changes to a file or entity
@@ -83,6 +102,14 @@ enum Commands {
         /// Programming language
         #[arg(short, long, default_value = "typescript")]
         language: String,
+
+        /// Disable entity limit (research mode)
+        #[arg(long)]
+        no_limit: bool,
+
+        /// Python package root name for absolute import resolution
+        #[arg(long)]
+        package_root: Option<String>,
     },
 
     /// Generate test intent recommendations from impact analysis
@@ -112,6 +139,14 @@ enum Commands {
         /// Programming language
         #[arg(short, long, default_value = "typescript")]
         language: String,
+
+        /// Disable entity limit (research mode)
+        #[arg(long)]
+        no_limit: bool,
+
+        /// Python package root name for absolute import resolution
+        #[arg(long)]
+        package_root: Option<String>,
     },
 }
 
@@ -119,12 +154,19 @@ fn main() {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Scan { path, language } => cmd_scan(&path, &language),
+        Commands::Scan {
+            path,
+            language,
+            no_limit,
+            package_root,
+        } => cmd_scan(&path, &language, no_limit, &package_root),
         Commands::Graph {
             path,
             export,
             language,
-        } => cmd_graph(&path, export.as_deref(), &language),
+            no_limit,
+            package_root,
+        } => cmd_graph(&path, export.as_deref(), &language, no_limit, &package_root),
         Commands::Impact {
             file,
             symbol,
@@ -133,6 +175,8 @@ fn main() {
             json,
             path,
             language,
+            no_limit,
+            package_root,
         } => cmd_impact(
             &path,
             &language,
@@ -141,6 +185,8 @@ fn main() {
             min_confidence,
             max_depth,
             json,
+            no_limit,
+            &package_root,
         ),
         Commands::Intent {
             file,
@@ -150,6 +196,8 @@ fn main() {
             json,
             path,
             language,
+            no_limit,
+            package_root,
         } => cmd_intent(
             &path,
             &language,
@@ -158,12 +206,14 @@ fn main() {
             min_confidence,
             max_depth,
             json,
+            no_limit,
+            &package_root,
         ),
     }
 }
 
 /// Build a graph by scanning source files in the given directory.
-fn build_graph(dir: &PathBuf, language: &str) -> UcmGraph {
+fn build_graph(dir: &PathBuf, language: &str, package_root: &Option<String>) -> UcmGraph {
     let mut graph = UcmGraph::new();
 
     // Walk the directory for source files
@@ -183,6 +233,13 @@ fn build_graph(dir: &PathBuf, language: &str) -> UcmGraph {
         code_parser::RustCrateMap::new()
     };
 
+    // Auto-detect Python package root if not specified.
+    let py_pkg_root: code_parser::PythonPackageRoot = if matches!(language, "python" | "py") {
+        package_root.clone().or_else(|| detect_python_package_root(dir))
+    } else {
+        None
+    };
+
     let walker = walk_source_files(dir, &extensions);
     for file_path in &walker {
         let source = match std::fs::read_to_string(file_path) {
@@ -196,14 +253,71 @@ fn build_graph(dir: &PathBuf, language: &str) -> UcmGraph {
             .to_string_lossy()
             .to_string();
 
-        let events =
-            code_parser::parse_source_code_with_context(&relative, &source, language, &crate_map);
+        let events = code_parser::parse_source_code_full(
+            &relative,
+            &source,
+            language,
+            &crate_map,
+            &py_pkg_root,
+        );
         for event in &events {
             ucm_events::projection::GraphProjection::apply_event(&mut graph, event);
         }
     }
 
     graph
+}
+
+/// Auto-detect Python package root by looking for a top-level directory with `__init__.py`.
+fn detect_python_package_root(dir: &PathBuf) -> Option<String> {
+    // Check pyproject.toml for project name first
+    let pyproject = dir.join("pyproject.toml");
+    if let Ok(content) = std::fs::read_to_string(&pyproject) {
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with("name") && trimmed.contains('=') {
+                let name = trimmed
+                    .split('=')
+                    .nth(1)?
+                    .trim()
+                    .trim_matches('"')
+                    .trim_matches('\'')
+                    .to_string();
+                if !name.is_empty() {
+                    // Package root dir must exist
+                    let pkg_dir = dir.join(&name);
+                    if pkg_dir.join("__init__.py").exists() {
+                        return Some(name);
+                    }
+                    // Try with hyphens replaced by underscores
+                    let underscored = name.replace('-', "_");
+                    let pkg_dir2 = dir.join(&underscored);
+                    if pkg_dir2.join("__init__.py").exists() {
+                        return Some(underscored);
+                    }
+                }
+            }
+        }
+    }
+
+    // Fallback: look for top-level dirs with __init__.py
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                let name = path.file_name()?.to_string_lossy().to_string();
+                if !name.starts_with('.')
+                    && !name.starts_with('_')
+                    && name != "tests"
+                    && name != "test"
+                    && path.join("__init__.py").exists()
+                {
+                    return Some(name);
+                }
+            }
+        }
+    }
+    None
 }
 
 /// Scan for Cargo.toml files and build a mapping: crate_name → src/ directory path.
@@ -284,24 +398,33 @@ fn walk_source_files(dir: &PathBuf, extensions: &[&str]) -> Vec<PathBuf> {
     files
 }
 
-fn check_community_limit(graph: &UcmGraph) -> bool {
+fn check_community_limit(graph: &UcmGraph, no_limit: bool) -> bool {
+    let limit = if no_limit {
+        RESEARCH_ENTITY_LIMIT
+    } else {
+        COMMUNITY_ENTITY_LIMIT
+    };
     let stats = graph.stats();
-    if stats.entity_count > COMMUNITY_ENTITY_LIMIT {
+    if stats.entity_count > limit {
         eprintln!();
         eprintln!(
-            "  This repo has {} entities, exceeding the community edition limit of {}.",
-            stats.entity_count, COMMUNITY_ENTITY_LIMIT
+            "  This repo has {} entities, exceeding the {} limit of {}.",
+            stats.entity_count,
+            if no_limit { "research mode" } else { "community edition" },
+            limit
         );
-        eprintln!("  Visit https://ucm.dev/pro for unlimited analysis.");
+        if !no_limit {
+            eprintln!("  Use --no-limit for research mode, or visit https://ucm.dev/pro for unlimited analysis.");
+        }
         eprintln!();
         return false;
     }
     true
 }
 
-fn cmd_scan(path: &PathBuf, language: &str) {
+fn cmd_scan(path: &PathBuf, language: &str, _no_limit: bool, package_root: &Option<String>) {
     println!("Scanning {} for {} files...", path.display(), language);
-    let graph = build_graph(path, language);
+    let graph = build_graph(path, language, package_root);
     let stats = graph.stats();
 
     println!();
@@ -318,8 +441,8 @@ fn cmd_scan(path: &PathBuf, language: &str) {
     println!("  Graph built successfully. Use `ucm impact` to analyze changes.");
 }
 
-fn cmd_graph(path: &PathBuf, export: Option<&str>, language: &str) {
-    let graph = build_graph(path, language);
+fn cmd_graph(path: &PathBuf, export: Option<&str>, language: &str, _no_limit: bool, package_root: &Option<String>) {
+    let graph = build_graph(path, language, package_root);
     let stats = graph.stats();
 
     if let Some("json") = export {
@@ -347,6 +470,7 @@ fn cmd_graph(path: &PathBuf, export: Option<&str>, language: &str) {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn cmd_impact(
     path: &PathBuf,
     language: &str,
@@ -355,10 +479,12 @@ fn cmd_impact(
     min_confidence: f64,
     max_depth: usize,
     json: bool,
+    no_limit: bool,
+    package_root: &Option<String>,
 ) {
-    let graph = build_graph(path, language);
+    let graph = build_graph(path, language, package_root);
 
-    if !check_community_limit(&graph) {
+    if !check_community_limit(&graph, no_limit) {
         return;
     }
 
@@ -433,6 +559,7 @@ fn cmd_impact(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn cmd_intent(
     path: &PathBuf,
     language: &str,
@@ -441,10 +568,12 @@ fn cmd_intent(
     min_confidence: f64,
     max_depth: usize,
     json: bool,
+    no_limit: bool,
+    package_root: &Option<String>,
 ) {
-    let graph = build_graph(path, language);
+    let graph = build_graph(path, language, package_root);
 
-    if !check_community_limit(&graph) {
+    if !check_community_limit(&graph, no_limit) {
         return;
     }
 

@@ -1,0 +1,318 @@
+Loading graph.json...
+  Entities: 8117
+  Edges: 14582
+================================================================================
+UCM GRAPH CONTRIBUTION ANALYSIS
+================================================================================
+
+Graph stats: 8117 entities, 14582 edges
+Test entities: 11
+Non-test entities: 8106
+Entities imported by tests: 4
+
+================================================================================
+1. TOP 20 HIGH IN-DEGREE ENTITIES WITHOUT TEST IMPORTS
+   (High-impact code that no test file imports)
+================================================================================
+
+  # 1  in-degree=119, dependents=118
+       Module: runtime.py
+       File: _runtime/runtime.py
+       Used by files: _runtime/runtime.py
+
+  # 2  in-degree=76, dependents=66
+       Module: app.py
+       File: _ast/app.py
+       Used by files: _ast/app.py
+
+  # 3  in-degree=68, dependents=68
+       Module: lsp.py
+       File: _server/lsp.py
+       Used by files: _server/lsp.py
+
+  # 4  in-degree=64, dependents=64
+       Module: models.py
+       File: _server/models/models.py
+       Used by files: _server/models/models.py
+
+  # 5  in-degree=57, dependents=55
+       Module: to_ir.py
+       File: _convert/ipynb/to_ir.py
+       Used by files: _convert/ipynb/to_ir.py
+
+  # 6  in-degree=57, dependents=56
+       Module: commands.py
+       File: _runtime/commands.py
+       Used by files: _runtime/commands.py
+
+  # 7  in-degree=55, dependents=1
+       Module: altair_charts.py
+       File: _smoke_tests/altair_examples/altair_charts.py
+       Used by files: _smoke_tests/altair_examples/altair_charts.py
+
+  # 8  in-degree=55, dependents=55
+       Module: providers.py
+       File: _server/ai/providers.py
+       Used by files: _server/ai/providers.py
+
+  # 9  in-degree=55, dependents=55
+       Module: input.py
+       File: _plugins/ui/_impl/input.py
+       Used by files: _plugins/ui/_impl/input.py
+
+  #10  in-degree=54, dependents=5
+       Module: ui.py
+       File: _tutorials/ui.py
+       Used by files: _tutorials/ui.py
+
+  #11  in-degree=54, dependents=54
+       Module: parse.py
+       File: _ast/parse.py
+       Used by files: _ast/parse.py
+
+  #12  in-degree=52, dependents=52
+       Module: streams.py
+       File: _messaging/streams.py
+       Used by files: _messaging/streams.py
+
+  #13  in-degree=52, dependents=52
+       Module: notification.py
+       File: _messaging/notification.py
+       Used by files: _messaging/notification.py
+
+  #14  in-degree=52, dependents=52
+       Module: visitor.py
+       File: _ast/visitor.py
+       Used by files: _ast/visitor.py
+
+  #15  in-degree=52, dependents=33
+       Module: save.py
+       File: _save/save.py
+       Used by files: _save/save.py
+
+  #16  in-degree=49, dependents=48
+       Module: cell.py
+       File: _ast/cell.py
+       Used by files: _ast/cell.py
+
+  #17  in-degree=49, dependents=49
+       Module: pypi_package_manager.py
+       File: _runtime/packages/pypi_package_manager.py
+       Used by files: _runtime/packages/pypi_package_manager.py
+
+  #18  in-degree=47, dependents=47
+       Module: file_path.py
+       File: _cli/files/file_path.py
+       Used by files: _cli/files/file_path.py
+
+  #19  in-degree=46, dependents=4
+       Module: dataflow.py
+       File: _tutorials/dataflow.py
+       Used by files: _tutorials/dataflow.py
+
+  #20  in-degree=46, dependents=46
+       Module: table.py
+       File: _plugins/ui/_impl/table.py
+       Used by files: _plugins/ui/_impl/table.py
+
+================================================================================
+2. HIDDEN DEPENDENCY CHAINS (3+ MODULES DEEP)
+   (Changes here ripple through multiple modules)
+================================================================================
+
+================================================================================
+3. UTILITY MODULES WITH HIGH BLAST RADIUS
+   (Files in _utils/, utils/, helpers/ etc. with large impact)
+================================================================================
+
+  # 1  _utils/platform.py
+       Entities: 4, File in-degree: 3
+       Direct dependents: 0 files
+       Transitive blast radius: 0 files
+       Test coverage: NO
+
+  # 2  _utils/scripts.py
+       Entities: 5, File in-degree: 4
+       Direct dependents: 0 files
+       Transitive blast radius: 0 files
+       Test coverage: NO
+
+  # 3  _utils/once.py
+       Entities: 3, File in-degree: 2
+       Direct dependents: 0 files
+       Transitive blast radius: 0 files
+       Test coverage: NO
+
+  # 4  _utils/with_skip.py
+       Entities: 11, File in-degree: 10
+       Direct dependents: 0 files
+       Transitive blast radius: 0 files
+       Test coverage: NO
+
+  # 5  _utils/paths.py
+       Entities: 6, File in-degree: 5
+       Direct dependents: 0 files
+       Transitive blast radius: 0 files
+       Test coverage: NO
+
+  # 6  _utils/typing.py
+       Entities: 1, File in-degree: 0
+       Direct dependents: 0 files
+       Transitive blast radius: 0 files
+       Test coverage: NO
+
+  # 7  _utils/health.py
+       Entities: 17, File in-degree: 16
+       Direct dependents: 0 files
+       Transitive blast radius: 0 files
+       Test coverage: NO
+
+  # 8  _utils/async_path.py
+       Entities: 45, File in-degree: 44
+       Direct dependents: 0 files
+       Transitive blast radius: 0 files
+       Test coverage: NO
+
+  # 9  _utils/variable_name.py
+       Entities: 2, File in-degree: 1
+       Direct dependents: 0 files
+       Transitive blast radius: 0 files
+       Test coverage: NO
+
+  #10  _utils/cell_matching.py
+       Entities: 11, File in-degree: 10
+       Direct dependents: 0 files
+       Transitive blast radius: 0 files
+       Test coverage: NO
+
+  #11  _utils/flatten.py
+       Entities: 11, File in-degree: 11
+       Direct dependents: 0 files
+       Transitive blast radius: 0 files
+       Test coverage: NO
+
+  #12  _utils/print.py
+       Entities: 3, File in-degree: 2
+       Direct dependents: 0 files
+       Transitive blast radius: 0 files
+       Test coverage: NO
+
+  #13  _utils/code.py
+       Entities: 2, File in-degree: 1
+       Direct dependents: 0 files
+       Transitive blast radius: 0 files
+       Test coverage: NO
+
+  #14  _utils/marimo_path.py
+       Entities: 19, File in-degree: 18
+       Direct dependents: 0 files
+       Transitive blast radius: 0 files
+       Test coverage: NO
+
+  #15  _utils/__init__.py
+       Entities: 1, File in-degree: 0
+       Direct dependents: 0 files
+       Transitive blast radius: 0 files
+       Test coverage: NO
+
+  #16  _utils/disposable.py
+       Entities: 7, File in-degree: 6
+       Direct dependents: 0 files
+       Transitive blast radius: 0 files
+       Test coverage: NO
+
+  #17  _utils/subprocess.py
+       Entities: 2, File in-degree: 7
+       Direct dependents: 0 files
+       Transitive blast radius: 0 files
+       Test coverage: NO
+
+  #18  _utils/log_formatter.py
+       Entities: 5, File in-degree: 4
+       Direct dependents: 0 files
+       Transitive blast radius: 0 files
+       Test coverage: NO
+
+  #19  _utils/theme.py
+       Entities: 2, File in-degree: 1
+       Direct dependents: 0 files
+       Transitive blast radius: 0 files
+       Test coverage: NO
+
+  #20  _utils/dicts.py
+       Entities: 2, File in-degree: 1
+       Direct dependents: 0 files
+       Transitive blast radius: 0 files
+       Test coverage: NO
+
+================================================================================
+SUMMARY: TOP CONTRIBUTION TARGETS
+(High impact + low test coverage = greatest value for contributors)
+================================================================================
+
+  # 1  _runtime/runtime.py  (score=243)
+       Key untested entities: runtime.py
+       Max in-degree: 119, Untested entities: 1
+
+  # 2  _ast/app.py  (score=157)
+       Key untested entities: app.py
+       Max in-degree: 76, Untested entities: 1
+
+  # 3  _server/lsp.py  (score=141)
+       Key untested entities: lsp.py
+       Max in-degree: 68, Untested entities: 1
+
+  # 4  _server/models/models.py  (score=133)
+       Key untested entities: models.py
+       Max in-degree: 64, Untested entities: 1
+
+  # 5  _convert/ipynb/to_ir.py  (score=119)
+       Key untested entities: to_ir.py
+       Max in-degree: 57, Untested entities: 1
+
+  # 6  _runtime/commands.py  (score=119)
+       Key untested entities: commands.py
+       Max in-degree: 57, Untested entities: 1
+
+  # 7  _smoke_tests/altair_examples/altair_charts.py  (score=115)
+       Key untested entities: altair_charts.py
+       Max in-degree: 55, Untested entities: 1
+
+  # 8  _server/ai/providers.py  (score=115)
+       Key untested entities: providers.py
+       Max in-degree: 55, Untested entities: 1
+
+  # 9  _plugins/ui/_impl/input.py  (score=115)
+       Key untested entities: input.py
+       Max in-degree: 55, Untested entities: 1
+
+  #10  _tutorials/ui.py  (score=113)
+       Key untested entities: ui.py
+       Max in-degree: 54, Untested entities: 1
+
+  #11  _ast/parse.py  (score=113)
+       Key untested entities: parse.py
+       Max in-degree: 54, Untested entities: 1
+
+  #12  _messaging/streams.py  (score=109)
+       Key untested entities: streams.py
+       Max in-degree: 52, Untested entities: 1
+
+  #13  _messaging/notification.py  (score=109)
+       Key untested entities: notification.py
+       Max in-degree: 52, Untested entities: 1
+
+  #14  _ast/visitor.py  (score=109)
+       Key untested entities: visitor.py
+       Max in-degree: 52, Untested entities: 1
+
+  #15  _save/save.py  (score=109)
+       Key untested entities: save.py
+       Max in-degree: 52, Untested entities: 1
+
+================================================================================
+END OF ANALYSIS
+================================================================================
+
+
+Results saved to /Users/paritoshkulkarni/contextqa-test/case-study/marimo/results/contribution-analysis.txt
