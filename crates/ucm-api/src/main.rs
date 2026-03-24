@@ -46,6 +46,7 @@ struct AppState {
     trace_store: Mutex<TraceStore>,
     linear_api_key: Mutex<Option<String>>,
     linear_workspace: Mutex<Option<String>>,
+    http_client: reqwest::Client,
 }
 
 #[tokio::main]
@@ -63,6 +64,7 @@ async fn main() {
         trace_store: Mutex::new(TraceStore::new()),
         linear_api_key: Mutex::new(None),
         linear_workspace: Mutex::new(None),
+        http_client: reqwest::Client::new(),
     });
 
     let app = Router::new()
@@ -574,8 +576,8 @@ async fn connect_linear(
     Json(req): Json<ConnectLinearRequest>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     // Validate the key by querying Linear's API
-    let client = reqwest::Client::new();
-    let res = client
+    let res = state
+        .http_client
         .post("https://api.linear.app/graphql")
         .header("Authorization", &req.api_key)
         .header("Content-Type", "application/json")
@@ -634,8 +636,8 @@ async fn ingest_linear(
     };
 
     // Fetch issues from Linear GraphQL API
-    let client = reqwest::Client::new();
-    let res = client
+    let res = state
+        .http_client
         .post("https://api.linear.app/graphql")
         .header("Authorization", &api_key)
         .header("Content-Type", "application/json")
