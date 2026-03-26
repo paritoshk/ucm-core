@@ -7,6 +7,7 @@ UCM builds a Bayesian dependency graph of your codebase and answers:
 
 [![CI](https://github.com/paritoshk/ucm-core/actions/workflows/ci.yml/badge.svg)](https://github.com/paritoshk/ucm-core/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Case Study](https://img.shields.io/badge/case%20study-marimo-green)](https://paritoshk.github.io/ucm-core/)
 
 ---
 
