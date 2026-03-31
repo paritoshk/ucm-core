@@ -32,32 +32,34 @@ cargo build --release
 ucm scan ./my-project --language typescript
 
 # Python — specify the package root for absolute import resolution
-ucm scan ./marimo --language python --package-root marimo
+# First, clone the target repository to analyze it locally:
+# git clone https://github.com/marimo-team/marimo ~/marimo
+ucm scan ~/marimo/marimo --language python --package-root marimo
 
 # Rust
 ucm scan ./my-crate --language rust
 
 # Large repos (>500 entities) need --no-limit
-ucm scan ./marimo --language python --package-root marimo --no-limit
+ucm scan ~/marimo/marimo --language python --package-root marimo --no-limit
 ```
 
 ### Run impact analysis before your PR
 ```bash
 # "I changed the execute_cell method in executor.py — what might break?"
 ucm impact _runtime/executor.py "Executor.execute_cell" \
-  --path ./marimo --language python --package-root marimo --no-limit --json
+  --path ~/marimo/marimo --language python --package-root marimo --no-limit --json
 ```
 
 ### Get test recommendations
 ```bash
 # "What should I test before merging?"
 ucm intent _runtime/executor.py "Executor.execute_cell" \
-  --path ./marimo --language python --package-root marimo --no-limit --json
+  --path ~/marimo/marimo --language python --package-root marimo --no-limit --json
 ```
 
 ### Export full graph for custom analysis
 ```bash
-ucm graph ./marimo --language python --package-root marimo --no-limit --export json > graph.json
+ucm graph ~/marimo/marimo --language python --package-root marimo --no-limit --export json > graph.json
 ```
 
 ---
@@ -272,7 +274,7 @@ UCM recommended **4 high-priority test scenarios**, identified **3 risks**, and 
 ```bash
 # After making changes to _ast/visitor.py
 ucm intent _ast/visitor.py ScopedVisitor \
-  --path . --language python --package-root marimo --no-limit
+  --path ~/marimo/marimo --language python --package-root marimo --no-limit
 
 # Output tells you:
 #   MUST TEST: hash.py, cell_manager.py, app.py (direct dependencies)
