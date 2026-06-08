@@ -46,7 +46,7 @@ export const metadata: Metadata = {
       "Three orthogonal layers — calibrated trust, change awareness, targeted revalidation — composed into one framework. Open-source Rust crates + enterprise consulting.",
     type: "website",
     locale: "en_US",
-    siteName: "UCM by Attian AI",
+    siteName: "UCM by Krava",
   },
   twitter: {
     card: "summary_large_image",
@@ -68,7 +68,7 @@ export default function RootLayout({
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Organization",
-    name: "Attian AI",
+    name: "Krava",
     description:
       "Unified Context Management — a reference architecture for reliable knowledge in enterprise agentic AI.",
     url: "https://ucm-core.vercel.app",

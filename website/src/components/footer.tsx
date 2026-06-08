@@ -11,7 +11,7 @@ export function Footer() {
               knowledge in agentic AI.
             </p>
             <p className="mt-3 text-xs text-rail-muted">
-              Kulkarni, Shaw, El Bouri · Attian AI · 2026
+              Kulkarni, Shaw, El Bouri · Krava · 2026
             </p>
           </div>
 
@@ -90,7 +90,7 @@ export function Footer() {
         </div>
 
         <div className="mt-10 border-t border-white/10 pt-6 text-center text-xs text-rail-muted">
-          © {new Date().getFullYear()} Attian AI. UCM is a design specification
+          © {new Date().getFullYear()} Krava. UCM is a design specification
           — see{" "}
           <a href="#faq" className="underline underline-offset-2 hover:text-rail-fg">
             FAQ
