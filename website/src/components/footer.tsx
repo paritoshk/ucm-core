@@ -11,7 +11,7 @@ export function Footer() {
               knowledge in agentic AI.
             </p>
             <p className="mt-3 text-xs text-rail-muted">
-              Kulkarni, Shaw, El Bouri · Krava · 2026
+              Kulkarni, El Bouri · Krava · 2026
             </p>
           </div>
 

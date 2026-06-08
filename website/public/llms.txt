@@ -19,4 +19,4 @@ UCM is packaged as a portable context module within the Krava SDK — enabling p
 ## Links
 - Source: https://github.com/paritoshk/ucm-core
 - Crates: https://crates.io/users/paritoshk
-- Authors: Kulkarni, Shaw, El Bouri — Krava, 2026
+- Authors: Kulkarni, El Bouri — Krava, 2026
