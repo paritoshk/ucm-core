@@ -1,0 +1,98 @@
+@import "tailwindcss";
+
+/* ── NOEIN Design System ── */
+
+@theme inline {
+  /* canvas */
+  --color-canvas: #FAF8F4;
+  --color-surface: #F4F0E6;
+  --color-surface-2: #EDE8DA;
+  --color-border: #E2DCCB;
+  --color-border-strong: #C9C0A8;
+
+  /* ink */
+  --color-ink: #1C1917;
+  --color-ink-2: #44403C;
+  --color-muted: #78716C;
+  --color-muted-2: #A8A29E;
+
+  /* dark rail */
+  --color-rail: #0C0A09;
+  --color-rail-fg: #E7E5E4;
+  --color-rail-muted: #78716C;
+
+  /* accent – burnt amber */
+  --color-amber: #B45309;
+  --color-amber-2: #D97706;
+  --color-amber-tint: #FEF3C7;
+  --color-amber-ink: #78350F;
+
+  /* signals */
+  --color-ok: #15803D;
+  --color-ok-tint: #DCFCE7;
+  --color-warn: #C2410C;
+  --color-warn-tint: #FFEDD5;
+  --color-crit: #B91C1C;
+  --color-crit-tint: #FEE2E2;
+  --color-info: #1D4ED8;
+  --color-info-tint: #DBEAFE;
+
+  /* type */
+  --font-serif: "Instrument Serif", Georgia, serif;
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "ss01", "cv11";
+}
+
+/* eyebrow label */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+/* hairline separator */
+.hairline {
+  border-color: var(--color-border);
+  border-top-width: 1px;
+}
+
+/* fade-up entry */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-up {
+  animation: fade-up 0.4s ease-out both;
+}
+
+/* live dot */
+@keyframes pulse-ring {
+  0%   { box-shadow: 0 0 0 0 rgba(21,128,61,0.5); }
+  70%  { box-shadow: 0 0 0 6px rgba(21,128,61,0); }
+  100% { box-shadow: 0 0 0 0 rgba(21,128,61,0); }
+}
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-ok);
+  animation: pulse-ring 2s ease-out infinite;
+}

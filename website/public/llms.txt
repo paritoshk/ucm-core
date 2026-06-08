@@ -1,0 +1,22 @@
+# UCM — Unified Context Management
+
+> A reference architecture for reliable knowledge in agentic AI.
+
+UCM composes three production-validated techniques from adjacent domains into a unified framework:
+
+1. **Calibrated Trust** (Layer 1) — Bayesian multi-source fusion inspired by Google's Knowledge Vault (KDD 2014). When the system outputs confidence 0.96, empirical accuracy is 0.96.
+
+2. **Change Awareness** (Layer 2) — Graph-distance impact propagation inspired by Meta's predictive test selection (ICSE-SEIP 2019). 33% of tests catch 99.9% of real failures.
+
+3. **Targeted Revalidation** (Layer 3) — Volatility classification and incremental re-computation inspired by Rust's Salsa engine (2019+). ~0ms revalidation for 90%+ of queries.
+
+## Implementation
+7 open-source Rust crates on crates.io: ucm-graph-core, ucm-events, ucm-ingest, ucm-reason, ucm-observe, ucm-api, ucm-cli.
+
+## Bundled with Krava
+UCM is packaged as a portable context module within the Krava SDK — enabling privacy-sovereign, model-agnostic context across applications. Krava provides passkey auth, encrypted memory, and agentic routing.
+
+## Links
+- Source: https://github.com/paritoshk/ucm-core
+- Crates: https://crates.io/users/paritoshk
+- Authors: Kulkarni, El Bouri — Krava, 2026
