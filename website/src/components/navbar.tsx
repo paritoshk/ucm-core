@@ -51,7 +51,7 @@ export function Navbar() {
       <nav className="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
         {/* Logo */}
         <a href="#" className="flex items-center gap-2">
-          <span className="font-serif text-xl text-rail-fg tracking-tight">
+          <span className={`font-serif text-xl tracking-tight ${scrolled ? "text-rail-fg" : "text-fg"}`}>
             UCM
           </span>
           <span className="live-dot" />
@@ -64,9 +64,13 @@ export function Navbar() {
               key={link.href}
               href={link.href}
               className={`relative px-3 py-1.5 text-[13px] font-medium transition-colors ${
-                activeSection === link.href
-                  ? "text-rail-fg"
-                  : "text-rail-muted hover:text-rail-fg"
+                scrolled
+                  ? activeSection === link.href
+                    ? "text-rail-fg"
+                    : "text-rail-muted hover:text-rail-fg"
+                  : activeSection === link.href
+                    ? "text-fg"
+                    : "text-muted hover:text-fg"
               }`}
             >
               {link.label}
@@ -88,7 +92,7 @@ export function Navbar() {
         {/* Mobile toggle */}
         <button
           onClick={() => setMobileOpen(!mobileOpen)}
-          className="flex h-8 w-8 items-center justify-center text-rail-fg md:hidden"
+          className={`flex h-8 w-8 items-center justify-center md:hidden ${scrolled ? "text-rail-fg" : "text-fg"}`}
           aria-label="Toggle menu"
         >
           <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
