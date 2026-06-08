@@ -5,6 +5,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.1.3]
+
+### Added
+- `README.md` for every workspace crate (`ucm-graph-core`, `ucm-events`,
+  `ucm-ingest`, `ucm-reason`, `ucm-observe`, `ucm-api`, `ucm-cli`) so crates.io
+  and docs.rs render per-crate documentation. Published v0.1.2 tarballs shipped
+  with no README; this release fixes that.
+
+### Changed
+- Workspace `repository`/`homepage` URLs: `contextqa-test` → `ucm-core`.
+- Applied `cargo fmt` across the workspace.
+
+## [0.1.2]
+
 ### Added
 - Linear integration: `POST /linear/connect`, `GET /linear/status`, `POST /ingest/linear`
 - Integrations tab in dashboard (API key → Connect → Import Issues)
