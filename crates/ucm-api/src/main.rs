@@ -28,11 +28,11 @@ use std::sync::{Arc, Mutex};
 use tower_http::cors::CorsLayer;
 use uuid::Uuid;
 
+use ucm_events::projection::GraphProjection;
+use ucm_events::store::EventStore;
 use ucm_graph_core::edge::{RelationType, UcmEdge};
 use ucm_graph_core::entity::*;
 use ucm_graph_core::graph::UcmGraph;
-use ucm_events::projection::GraphProjection;
-use ucm_events::store::EventStore;
 use ucm_ingest::{code_parser, diff_parser, jira_adapter, linear_adapter};
 use ucm_observe::trace::{trace_impact_analysis, TraceStore};
 use ucm_reason::ambiguity::enrich_with_ambiguities;

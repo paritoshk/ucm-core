@@ -88,7 +88,13 @@ pub fn parse_source_code_full(
         let py_entities = extract_python_entities(source);
         for ent in &py_entities {
             match ent {
-                PythonEntity::Function { name, is_async, line_start, line_end, class_name } => {
+                PythonEntity::Function {
+                    name,
+                    is_async,
+                    line_start,
+                    line_end,
+                    class_name,
+                } => {
                     let display_name = if let Some(cls) = class_name {
                         format!("{cls}.{name}")
                     } else {
@@ -129,7 +135,11 @@ pub fn parse_source_code_full(
                         }));
                     }
                 }
-                PythonEntity::Class { name, line_num, bases } => {
+                PythonEntity::Class {
+                    name,
+                    line_num,
+                    bases,
+                } => {
                     let class_id = EntityId::local(file_path, name);
                     events.push(UcmEvent::new(EventPayload::EntityDiscovered {
                         entity_id: class_id.clone(),
@@ -1197,8 +1207,8 @@ app.post('/api/v1/auth/login', handleLogin);
         let mid_src =
             "import { validateToken } from './auth';\nexport function authMiddleware() {}";
 
-        use ucm_graph_core::graph::UcmGraph;
         use ucm_events::projection::GraphProjection;
+        use ucm_graph_core::graph::UcmGraph;
         let mut graph = UcmGraph::new();
         for ev in parse_source_code("src/auth.ts", auth_src, "typescript") {
             GraphProjection::apply_event(&mut graph, &ev);
@@ -1229,7 +1239,11 @@ import marimo._plugins.ui as ui
         let imports = extract_imports_python(source, "_runtime/runtime.py", &pkg_root);
 
         // Should find 3 imports: 2 `from` + 1 bare `import` matching package root
-        assert_eq!(imports.len(), 3, "Expected 3 marimo imports, got {imports:?}");
+        assert_eq!(
+            imports.len(),
+            3,
+            "Expected 3 marimo imports, got {imports:?}"
+        );
 
         // Check first import resolves correctly (package root stripped)
         let dg_import = imports
@@ -1322,13 +1336,29 @@ def standalone_function():
 
         let methods: Vec<_> = entities
             .iter()
-            .filter(|e| matches!(e, PythonEntity::Function { class_name: Some(_), .. }))
+            .filter(|e| {
+                matches!(
+                    e,
+                    PythonEntity::Function {
+                        class_name: Some(_),
+                        ..
+                    }
+                )
+            })
             .collect();
         assert_eq!(methods.len(), 3, "Should find 3 methods in DirectedGraph");
 
         let standalone: Vec<_> = entities
             .iter()
-            .filter(|e| matches!(e, PythonEntity::Function { class_name: None, .. }))
+            .filter(|e| {
+                matches!(
+                    e,
+                    PythonEntity::Function {
+                        class_name: None,
+                        ..
+                    }
+                )
+            })
             .collect();
         assert_eq!(standalone.len(), 1, "Should find 1 standalone function");
 
