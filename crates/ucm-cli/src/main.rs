@@ -235,7 +235,9 @@ fn build_graph(dir: &PathBuf, language: &str, package_root: &Option<String>) -> 
 
     // Auto-detect Python package root if not specified.
     let py_pkg_root: code_parser::PythonPackageRoot = if matches!(language, "python" | "py") {
-        package_root.clone().or_else(|| detect_python_package_root(dir))
+        package_root
+            .clone()
+            .or_else(|| detect_python_package_root(dir))
     } else {
         None
     };
@@ -410,7 +412,11 @@ fn check_community_limit(graph: &UcmGraph, no_limit: bool) -> bool {
         eprintln!(
             "  This repo has {} entities, exceeding the {} limit of {}.",
             stats.entity_count,
-            if no_limit { "research mode" } else { "community edition" },
+            if no_limit {
+                "research mode"
+            } else {
+                "community edition"
+            },
             limit
         );
         if !no_limit {
@@ -441,7 +447,13 @@ fn cmd_scan(path: &PathBuf, language: &str, _no_limit: bool, package_root: &Opti
     println!("  Graph built successfully. Use `ucm impact` to analyze changes.");
 }
 
-fn cmd_graph(path: &PathBuf, export: Option<&str>, language: &str, _no_limit: bool, package_root: &Option<String>) {
+fn cmd_graph(
+    path: &PathBuf,
+    export: Option<&str>,
+    language: &str,
+    _no_limit: bool,
+    package_root: &Option<String>,
+) {
     let graph = build_graph(path, language, package_root);
     let stats = graph.stats();
 
