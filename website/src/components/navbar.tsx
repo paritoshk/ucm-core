@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 const NAV_LINKS = [
   { label: "Problem", href: "#problem" },
   { label: "Architecture", href: "#layers" },
-  { label: "Implementation", href: "#crates" },
+  { label: "Crates", href: "#crates" },
   { label: "Case Study", href: "#case-study" },
   { label: "FAQ", href: "#faq" },
 ];
@@ -51,7 +51,7 @@ export function Navbar() {
       <nav className="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
         {/* Logo */}
         <a href="#" className="flex items-center gap-2">
-          <span className={`font-serif text-xl tracking-tight ${scrolled ? "text-rail-fg" : "text-fg"}`}>
+          <span className={`font-display text-xl tracking-tight ${scrolled ? "text-rail-fg" : "text-fg"}`}>
             UCM
           </span>
           <span className="live-dot" />

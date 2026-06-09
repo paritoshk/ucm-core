@@ -57,7 +57,7 @@ export function ContactForm() {
   if (status === "success") {
     return (
       <div className="rounded-[2px] border border-ok/30 bg-ok-tint p-8 text-center">
-        <p className="font-serif text-2xl text-ink">Thank you</p>
+        <p className="font-display text-2xl text-ink">Thank you</p>
         <p className="mt-2 text-sm text-muted">
           We&apos;ll be in touch within one business day.
         </p>

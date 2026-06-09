@@ -6,7 +6,7 @@ export function ProblemSection() {
     <section id="problem" className="border-t border-border py-20 md:py-28">
       <div className="mx-auto max-w-6xl px-6">
         <p className="eyebrow">The Problem</p>
-        <h2 className="mt-3 font-serif text-[clamp(28px,4vw,40px)] leading-tight text-ink">
+        <h2 className="mt-3 font-display text-[clamp(28px,4vw,40px)] leading-tight text-ink">
           Models work. The knowledge they operate on does not.
         </h2>
         <p className="mt-4 max-w-2xl text-base text-ink-2">
@@ -84,7 +84,7 @@ export function ApproachesSection() {
     <section className="border-t border-border bg-surface py-20 md:py-28">
       <div className="mx-auto max-w-6xl px-6">
         <p className="eyebrow">Why Current Approaches Fail</p>
-        <h2 className="mt-3 font-serif text-[clamp(28px,4vw,40px)] leading-tight text-ink">
+        <h2 className="mt-3 font-display text-[clamp(28px,4vw,40px)] leading-tight text-ink">
           Three patterns, three failure modes
         </h2>
 
@@ -145,7 +145,7 @@ export function LayersSection() {
     <section id="layers" className="border-t border-border py-20 md:py-28">
       <div className="mx-auto max-w-6xl px-6">
         <p className="eyebrow">The Architecture</p>
-        <h2 className="mt-3 font-serif text-[clamp(28px,4vw,40px)] leading-tight text-ink">
+        <h2 className="mt-3 font-display text-[clamp(28px,4vw,40px)] leading-tight text-ink">
           Three orthogonal layers, one composition
         </h2>
         <p className="mt-4 max-w-2xl text-base text-ink-2">
@@ -163,7 +163,7 @@ export function LayersSection() {
             >
               <div className="flex flex-wrap items-baseline gap-3">
                 <span className="eyebrow">{layer.num}</span>
-                <h3 className="font-serif text-2xl text-ink">
+                <h3 className="font-display text-2xl text-ink">
                   {layer.title}
                 </h3>
               </div>
@@ -244,7 +244,7 @@ export function CratesSection() {
     >
       <div className="mx-auto max-w-6xl px-6">
         <p className="eyebrow">Implementation</p>
-        <h2 className="mt-3 font-serif text-[clamp(28px,4vw,40px)] leading-tight text-ink">
+        <h2 className="mt-3 font-display text-[clamp(28px,4vw,40px)] leading-tight text-ink">
           7 Rust crates, published on crates.io
         </h2>
         <p className="mt-4 max-w-2xl text-base text-ink-2">
@@ -279,6 +279,37 @@ export function CratesSection() {
             </a>
           ))}
         </div>
+
+        {/* Showcase links */}
+        <div className="mt-10 flex flex-wrap items-center gap-4">
+          <a
+            href="https://github.com/paritoshk/ucm-core"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-[2px] border border-border px-4 py-2 text-sm font-medium font-sans text-ink transition-colors hover:bg-canvas"
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="opacity-70">
+              <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z" />
+            </svg>
+            Source on GitHub
+          </a>
+          <a
+            href="https://crates.io/users/paritoshk"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-[2px] border border-border px-4 py-2 text-sm font-medium font-sans text-ink transition-colors hover:bg-canvas"
+          >
+            All crates on crates.io
+          </a>
+          <a
+            href="https://docs.rs/ucm-graph-core"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-[2px] border border-border px-4 py-2 text-sm font-medium font-sans text-ink transition-colors hover:bg-canvas"
+          >
+            API docs on docs.rs
+          </a>
+        </div>
       </div>
     </section>
   );
@@ -290,7 +321,7 @@ export function CaseStudySection() {
     <section id="case-study" className="border-t border-border py-20 md:py-28">
       <div className="mx-auto max-w-6xl px-6">
         <p className="eyebrow">Case Study</p>
-        <h2 className="mt-3 font-serif text-[clamp(28px,4vw,40px)] leading-tight text-ink">
+        <h2 className="mt-3 font-display text-[clamp(28px,4vw,40px)] leading-tight text-ink">
           Banking: unauthorized refund prevention
         </h2>
         <p className="mt-4 max-w-2xl text-base text-ink-2">
@@ -342,7 +373,7 @@ export function CaseStudySection() {
               bundled offering
             </span>
           </div>
-          <h3 className="mt-3 font-serif text-2xl text-rail-fg">
+          <h3 className="mt-3 font-display text-2xl text-rail-fg">
             Privacy-sovereign context for enterprise agents
           </h3>
           <p className="mt-3 max-w-2xl text-sm leading-relaxed text-rail-muted">

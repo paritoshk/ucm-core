@@ -29,7 +29,7 @@ export default function Home() {
             <div className="grid gap-12 md:grid-cols-2">
               <div>
                 <p className="eyebrow">Get Started</p>
-                <h2 className="mt-3 font-serif text-[clamp(28px,4vw,40px)] leading-tight text-ink">
+                <h2 className="mt-3 font-display text-[clamp(28px,4vw,40px)] leading-tight text-ink">
                   Book a technical consult
                 </h2>
                 <p className="mt-4 text-base text-ink-2">
