@@ -51,11 +51,12 @@ html {
 body {
   background: var(--color-canvas);
   color: var(--color-ink);
-  font-family: var(--font-serif);
-  font-size: 15px;
-  line-height: 1.7;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "ss01", "cv11";
 }
 
 /* eyebrow label */
