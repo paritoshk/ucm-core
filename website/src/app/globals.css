@@ -38,7 +38,8 @@
   --color-info-tint: #DBEAFE;
 
   /* type */
-  --font-serif: "Instrument Serif", Georgia, serif;
+  --font-display: "Instrument Serif", Georgia, serif;
+  --font-serif: "Source Serif 4", Georgia, serif;
   --font-sans: "Inter", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 }
@@ -50,12 +51,11 @@ html {
 body {
   background: var(--color-canvas);
   color: var(--color-ink);
-  font-family: var(--font-sans);
-  font-size: 14px;
-  line-height: 1.6;
+  font-family: var(--font-serif);
+  font-size: 15px;
+  line-height: 1.7;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  font-feature-settings: "ss01", "cv11";
 }
 
 /* eyebrow label */
@@ -81,6 +81,11 @@ body {
 }
 .fade-up {
   animation: fade-up 0.4s ease-out both;
+}
+
+/* display headings — use Instrument Serif for large display text */
+.font-display {
+  font-family: var(--font-display);
 }
 
 /* live dot */

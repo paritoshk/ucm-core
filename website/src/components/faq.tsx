@@ -50,7 +50,7 @@ export function FaqSection() {
         />
 
         <p className="eyebrow">Frequently Asked Questions</p>
-        <h2 className="mt-3 font-serif text-[clamp(28px,4vw,40px)] leading-tight text-ink">
+        <h2 className="mt-3 font-display text-[clamp(28px,4vw,40px)] leading-tight text-ink">
           Common questions
         </h2>
 

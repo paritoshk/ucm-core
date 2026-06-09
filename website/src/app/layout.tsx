@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono, Instrument_Serif } from "next/font/google";
+import { Inter, JetBrains_Mono, Instrument_Serif, Source_Serif_4 } from "next/font/google";
 import "./globals.css";
 
 const inter = Inter({
@@ -15,9 +15,15 @@ const jetbrains = JetBrains_Mono({
 });
 
 const instrumentSerif = Instrument_Serif({
-  variable: "--font-serif",
+  variable: "--font-display",
   subsets: ["latin"],
   weight: "400",
+  display: "swap",
+});
+
+const sourceSerif = Source_Serif_4({
+  variable: "--font-serif",
+  subsets: ["latin"],
   display: "swap",
 });
 
@@ -71,7 +77,7 @@ export default function RootLayout({
     name: "Krava",
     description:
       "Unified Context Management — a reference architecture for reliable knowledge in enterprise agentic AI.",
-    url: "https://ucm-core.vercel.app",
+    url: "https://getcontextmanaged.vercel.app",
     sameAs: [
       "https://github.com/paritoshk/ucm-core",
       "https://crates.io/users/paritoshk",
@@ -81,7 +87,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${jetbrains.variable} ${instrumentSerif.variable} h-full`}
+      className={`${inter.variable} ${jetbrains.variable} ${instrumentSerif.variable} ${sourceSerif.variable} h-full`}
     >
       <body className="min-h-full">
         <script

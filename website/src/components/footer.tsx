@@ -5,7 +5,7 @@ export function Footer() {
         <div className="grid gap-8 sm:grid-cols-3">
           {/* Brand */}
           <div>
-            <span className="font-serif text-xl text-rail-fg">UCM</span>
+            <span className="font-display text-xl text-rail-fg">UCM</span>
             <p className="mt-2 text-sm text-rail-muted">
               Unified Context Management — a reference architecture for reliable
               knowledge in agentic AI.
@@ -17,7 +17,7 @@ export function Footer() {
 
           {/* Resources */}
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-rail-muted">
+            <p className="text-xs font-semibold font-sans uppercase tracking-wider text-rail-muted">
               Resources
             </p>
             <ul className="mt-3 space-y-2 text-sm text-rail-fg/70">
@@ -61,12 +61,22 @@ export function Footer() {
                   Presentation
                 </a>
               </li>
+              <li>
+                <a
+                  href="https://paritoshkulkarni.space/ucm"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-rail-fg"
+                >
+                  paritoshkulkarni.space/ucm
+                </a>
+              </li>
             </ul>
           </div>
 
           {/* Partners */}
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-rail-muted">
+            <p className="text-xs font-semibold font-sans uppercase tracking-wider text-rail-muted">
               Partners
             </p>
             <ul className="mt-3 space-y-2 text-sm text-rail-fg/70">
